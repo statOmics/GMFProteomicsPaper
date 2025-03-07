@@ -1,0 +1,892 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-31'
+---
+
+```{r}
+library(here)
+library(msqrob2)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(here)
+```
+
+```{r}
+reconstruct_sgd <- function(sgd, rownames = NULL){
+  
+  reconstructed <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))
+  if(!is.null(rownames)){
+    reconstructed <- reconstructed[rownames, ]
+  }
+    return(t(reconstructed))
+
+}
+
+```
+
+```{r}
+sce <- readRDS(here("Data/CPTEx_nolab1/CPTEx_sce_nolab1.RDS"))
+
+
+sgd <- readRDS(here("Analyses/CPTEx_nolab1/Output/sgd_sce.RDS"))
+sgd_batch <- readRDS(here("Analyses/CPTEx_nolab1/Output/sgd_batch_sce.RDS"))
+sgd_batch_condition <- readRDS(here("Analyses/CPTEx_nolab1/Output/sgd_batch_condition_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/CPTEx_nolab1/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses/CPTEx_nolab1/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+CF <- read.csv(file = here("Analyses/CPTEx_nolab1/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+knn <- readRDS(file = here("Analyses/CPTEx_nolab1/Output/knnmethod_sce.RDS"))
+
+
+
+```
+
+```{r}
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+colData(sce)$lab <- rep(rep(paste0("lab",2:3),each=3),5) %>% as.factor
+
+colData(sce)$samples <- as.factor(rownames(colData(sce)))
+
+
+```
+
+```{r}
+
+sce_sgd <- sce
+assay(sce_sgd)[is.na(assay(sce_sgd))] <- t(reconstruct_sgd(
+  sgd, 
+  rownames = rownames(sce)))[is.na(assay(sce_sgd))]
+
+rowData(sce_sgd) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_batch <- sce
+assay(sce_sgd_batch)[is.na(assay(sce_sgd_batch))] <- t(reconstruct_sgd(
+  sgd_batch, 
+  rownames = rownames(sce)))[is.na(assay(sce_sgd_batch))]
+
+rowData(sce_sgd_batch) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+sce_sgd_batch_condition <- sce
+assay(sce_sgd_batch_condition)[is.na(assay(sce_sgd_batch_condition))] <- 
+    t(reconstruct_sgd(
+  sgd_batch_condition, 
+  rownames = rownames(sce)))[is.na(assay(sce_sgd_batch_condition))]
+
+rowData(sce_sgd_batch_condition) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+```
+
+```{r}
+sce_DAE <- sce
+assay(sce_DAE) <- t(DAE)
+rowData(sce_DAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_VAE <- sce
+assay(sce_VAE) <- t(VAE)
+rowData(sce_VAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+sce_CF <- sce
+assay(sce_CF) <- t(CF)
+rowData(sce_CF) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_knn <- sce
+assay(sce_knn) <- t(knn)
+rowData(sce_knn) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+```
+
+
+```{r}
+library(QFeatures)
+qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
+
+qf_sce <- QFeatures(list("peptide" = sce_sgd), colData = colData(sce))
+qf_sgd_batch <- QFeatures(list("peptide" = sce_sgd_batch), colData = colData(sce))
+qf_sgd_batch_condition <- QFeatures(list("peptide" = sce_sgd_batch_condition), colData = colData(sce))
+
+qf_DAE <- QFeatures(list("peptide" = sce_DAE), colData = colData(sce))
+qf_VAE <- QFeatures(list("peptide" = sce_VAE), colData = colData(sce))
+qf_CF <- QFeatures(list("peptide" = sce_CF), colData = colData(sce))
+qf_knn <- QFeatures(list("peptide" = sce_knn), colData = colData(sce))
+
+```
+
+
+
+```{r}
+
+pe_original <- msqrobAggregate(qf_original, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_sce <- msqrobAggregate(qf_sce, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_sgd_batch <-  msqrobAggregate(qf_sgd_batch, i = "peptide", fcol = "Proteins",
+     formula = ~condition  + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sgd_batch_condition <-  msqrobAggregate(qf_sgd_batch_condition, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_DAE <-  msqrobAggregate(qf_DAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+
+pe_VAE <- msqrobAggregate(qf_VAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+
+pe_CF <-  msqrobAggregate(qf_CF, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_knn <-  msqrobAggregate(qf_knn, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+```
+
+
+```{r}
+comparisonsRef <- paste0(paste0("ridgecondition", c("B","C","D","E")), " = 0")
+comparisonsRef
+
+comparisonsOther <- paste0(
+    apply(
+          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - ")
+          , " = 0")
+comparisonsOther
+
+comparisons <- c(comparisonsRef, comparisonsOther)
+
+```
+```{r}
+L <- makeContrast(comparisons, parameterNames = paste0("ridgecondition", c("B","C","D","E")))
+L
+
+```
+
+
+```{r}
+
+LBA <- makeContrast(
+    "ridgeconditionB = 0",
+    c("ridgeconditionB")
+)
+
+LCB <- makeContrast(
+    "ridgeconditionC - ridgeconditionB = 0",
+    c("ridgeconditionC", "ridgeconditionB")
+)
+
+LDC <- makeContrast(
+    "ridgeconditionD - ridgeconditionC = 0",
+    c("ridgeconditionD", "ridgeconditionC")
+)
+
+LED <- makeContrast(
+    "ridgeconditionE - ridgeconditionD = 0",
+    c("ridgeconditionE", "ridgeconditionD")
+)
+
+pe_original <- hypothesisTest(
+    object = pe_original, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_original <- hypothesisTest(
+    object = pe_original, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_original <- hypothesisTest(
+    object = pe_original, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_original <- hypothesisTest(
+    object = pe_original, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+
+pe_sce <- hypothesisTest(
+    object = pe_sce, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_sce <- hypothesisTest(
+    object = pe_sce, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_sce <- hypothesisTest(
+    object = pe_sce, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_sce <- hypothesisTest(
+    object = pe_sce, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+
+
+pe_sgd_batch <- hypothesisTest(
+    object = pe_sgd_batch, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_sgd_batch <- hypothesisTest(
+    object = pe_sgd_batch, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_sgd_batch <- hypothesisTest(
+    object = pe_sgd_batch, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_sgd_batch <- hypothesisTest(
+    object = pe_sgd_batch, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+
+pe_sgd_batch_condition <- hypothesisTest(
+    object = pe_sgd_batch_condition, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_sgd_batch_condition <- hypothesisTest(
+    object = pe_sgd_batch_condition, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_sgd_batch_condition <- hypothesisTest(
+    object = pe_sgd_batch_condition, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_sgd_batch_condition <- hypothesisTest(
+    object = pe_sgd_batch_condition, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+pe_DAE <- hypothesisTest(
+    object = pe_DAE, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_DAE <- hypothesisTest(
+    object = pe_DAE, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_DAE <- hypothesisTest(
+    object = pe_DAE, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_DAE <- hypothesisTest(
+    object = pe_DAE, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+
+
+pe_VAE <- hypothesisTest(
+    object = pe_VAE, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_VAE <- hypothesisTest(
+    object = pe_VAE, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_VAE <- hypothesisTest(
+    object = pe_VAE, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_VAE <- hypothesisTest(
+    object = pe_VAE, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+pe_CF <- hypothesisTest(
+    object = pe_CF, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_CF <- hypothesisTest(
+    object = pe_CF, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_CF <- hypothesisTest(
+    object = pe_CF, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_CF <- hypothesisTest(
+    object = pe_CF, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+pe_knn <- hypothesisTest(
+    object = pe_knn, i = "msqrobAggregate", contrast = LBA,
+    modelColumn = "msqrobModels", overwrite = T
+)
+
+pe_knn <- hypothesisTest(
+    object = pe_knn, i = "msqrobAggregate", contrast = LCB,
+    modelColumn = "msqrobModels"
+)
+
+pe_knn <- hypothesisTest(
+    object = pe_knn, i = "msqrobAggregate", contrast = LDC,
+    modelColumn = "msqrobModels"
+)
+pe_knn <- hypothesisTest(
+    object = pe_knn, i = "msqrobAggregate", contrast = LED,
+    modelColumn = "msqrobModels"
+)
+
+
+
+```
+
+
+
+
+```{r}
+rowData(pe_original[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+rowData(pe_sce[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+rowData(pe_sgd_batch[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_sgd_batch_condition[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+
+rowData(pe_DAE[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_VAE[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_CF[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_knn[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+```
+
+<!-- ```{r} -->
+<!-- volcanoRidge <- rowData(pe[["protein"]])[[colnames(LBA)]] %>% -->
+<!--     ggplot(aes( -->
+<!--         x = logFC, y = -log10(pval), -->
+<!--         color = rowData(pe[["protein"]])$ups -->
+<!--     )) + -->
+<!--     geom_point(cex = 2.5) + -->
+<!--     scale_color_manual(values = alpha(c("black", "red"), 0.5)) + -->
+<!--     theme_minimal() + -->
+<!--     geom_vline(xintercept = log2(0.74 / 0.25), col = "red") + -->
+<!--     ggtitle(paste("robust ridge")) -->
+
+<!-- volcanoRidge_DAE <- rowData(pe_DAE[["protein"]])[[colnames(LBA)]] %>% -->
+<!--     ggplot(aes( -->
+<!--         x = logFC, y = -log10(pval), -->
+<!--         color = rowData(pe_DAE[["protein"]])$ups -->
+<!--     )) + -->
+<!--     geom_point(cex = 2.5) + -->
+<!--     scale_color_manual(values = alpha(c("black", "red"), 0.5)) + -->
+<!--     theme_minimal() + -->
+<!--     geom_vline(xintercept = log2(0.74 / 0.25), col = "red") + -->
+<!--     ggtitle(paste("robust ridge")) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- volcanoRidge -->
+<!-- volcanoRidge_DAE -->
+
+
+<!-- ``` -->
+
+```{r}
+myColors <- c("red", 
+               "orange3", 
+               "orange4",
+              "blue", "green","cyan", "maroon", "orchid2", "purple", "deeppink","black")
+names(myColors) <- c("SGD", 
+                     "SGD-batch", "SGD-batch-condition", 
+                     "DAE", "CF", "VAE",
+                     "BPCA", "KNN", "QRILC","zero",
+                     "original")
+colScale <- scale_colour_manual(name = "method",values = myColors)
+
+```
+
+```{r}
+tprFdp <- function(pval, tp, adjPval) {
+    ord <- order(pval)
+    return(data.frame(
+        pval = pval[ord],
+        adjPval = adjPval[ord],
+        tpr = cumsum(tp[ord]) / sum(tp),
+        fdp = cumsum(!tp[ord]) / 1:length(tp)
+    ))
+}
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_sce[["msqrobAggregate"]])$ups,
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+
+
+tprFdpSGD_batch <- tprFdp(
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+tprFdpSGD_batch_condition <- tprFdp(
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$ups,
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$ups,
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$ups,
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$ups,
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+tprFdporiginal <- tprFdp(
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LBA)]]$pval,
+    rowData(pe_original[["msqrobAggregate"]])$ups,
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LBA)]]$adjPval
+)
+
+
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpSGD_batch, method = "SGD-batch"),
+    cbind(tprFdpSGD_batch_condition, method = "SGD-batch-condition"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "original")
+    )
+hlp$method <- factor(hlp$method, levels = c("SGD","SGD-batch","SGD-batch-condition","DAE","VAE","CF","KNN", "original"))
+
+tprFdpPlot <- hlp %>%
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("A versus B") + 
+    xlab("FDP") + ylab("TPR")
+tprFdpPlot
+
+tprFdpPlot_1 <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","original")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("A versus B")+ 
+    xlab("FDP") + ylab("TPR")
+tprFdpPlot_1
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_sce[["msqrobAggregate"]])$ups,
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+
+tprFdpSGD_batch <- tprFdp(
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+tprFdpSGD_batch_condition <- tprFdp(
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$ups,
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$ups,
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$ups,
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$ups,
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+tprFdporiginal <- tprFdp(
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LCB)]]$pval,
+    rowData(pe_original[["msqrobAggregate"]])$ups,
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LCB)]]$adjPval
+)
+
+
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpSGD_batch, method = "SGD-batch"),
+    cbind(tprFdpSGD_batch_condition, method = "SGD-batch-condition"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "original")
+    )
+hlp$method <- factor(hlp$method, levels = c("SGD","SGD-batch","SGD-batch-condition","DAE","VAE","CF","KNN", "original"))
+
+tprFdpPlot <- hlp %>%
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("B versus C")
+tprFdpPlot
+
+
+tprFdpPlot_2 <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","original")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("B versus C")+ 
+    xlab("FDP") + ylab("TPR")
+tprFdpPlot_2
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_sce[["msqrobAggregate"]])$ups,
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+
+tprFdpSGD_batch <- tprFdp(
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+tprFdpSGD_batch_condition <- tprFdp(
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$ups,
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$ups,
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$ups,
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$ups,
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+tprFdporiginal <- tprFdp(
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LDC)]]$pval,
+    rowData(pe_original[["msqrobAggregate"]])$ups,
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LDC)]]$adjPval
+)
+
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpSGD_batch, method = "SGD-batch"),
+    cbind(tprFdpSGD_batch_condition, method = "SGD-batch-condition"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "original")
+)
+hlp$method <- factor(hlp$method, levels = c("SGD","SGD-batch","SGD-batch-condition","DAE","VAE","CF","KNN", "original"))
+
+tprFdpPlot <- hlp %>%
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("C versus D")
+tprFdpPlot
+
+
+tprFdpPlot_3 <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","original"))%>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("C versus D")+ 
+    xlab("FDP") + ylab("TPR")
+tprFdpPlot_3
+
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_sce[["msqrobAggregate"]])$ups,
+    rowData(pe_sce[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+
+tprFdpSGD_batch <- tprFdp(
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+tprFdpSGD_batch_condition <- tprFdp(
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$ups,
+    rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$ups,
+    rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$ups,
+    rowData(pe_CF[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$ups,
+    rowData(pe_knn[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+
+tprFdporiginal <- tprFdp(
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LED)]]$pval,
+    rowData(pe_original[["msqrobAggregate"]])$ups,
+    rowData(pe_original[["msqrobAggregate"]])[[colnames(LED)]]$adjPval
+)
+
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpSGD_batch, method = "SGD-batch"),
+    cbind(tprFdpSGD_batch_condition, method = "SGD-batch-condition"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "original")
+)
+hlp$method <- factor(hlp$method, levels = c("SGD","SGD-batch","SGD-batch-condition","DAE","VAE","CF","KNN", "original"))
+tprFdpPlot <- hlp %>%
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("D versus E")+ 
+    xlab("FDP") + ylab("TPR")
+
+
+
+tprFdpPlot_4 <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","original")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + theme_bw() + colScale + ggtitle("D versus E") + 
+    xlab("FDP") + ylab("TPR")
+tprFdpPlot_4
+
+
+saveRDS(object = tprFdpPlot_1, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/tprFdpPlot_1.RDS")
+saveRDS(object = tprFdpPlot_2, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/tprFdpPlot_2.RDS")
+saveRDS(object = tprFdpPlot_3, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/tprFdpPlot_3.RDS")
+saveRDS(object = tprFdpPlot_4, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/tprFdpPlot_4.RDS")
+
+ggpubr::ggarrange(tprFdpPlot_1, tprFdpPlot_2, tprFdpPlot_3, tprFdpPlot_4, 
+                  common.legend = T, legend = "bottom")
+```
+
+
+```{r}
+logFC <- data.frame(
+    SGD = rowData(pe_sce[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    # sgd_batch = rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    # sgd_batch_condition = rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[colnames(LBA)]][, 1],
+    ups = rowData(pe_sce[["msqrobAggregate"]])$ups
+)
+
+logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            #"sgd_batch","sgd_batch_condition", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+logFC$ups <- as.factor(logFC$ups)
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                #"sgd_batch","sgd_batch_condition", 
+                                                "DAE", "VAE", "CF", "KNN", "original"))
+
+logFC_p1 <- logFC %>% ggplot(aes(x = method, y = log2FC, fill = ups)) +
+    geom_boxplot() +
+    geom_hline(yintercept = log2(0.74 / .25), color = "red") + theme_bw()
+logFC_p1
+
+logFC <- data.frame(
+    SGD = rowData(pe_sce[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    # sgd_batch = rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    # sgd_batch_condition = rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[colnames(LCB)]][, 1],
+    ups = rowData(pe_sce[["msqrobAggregate"]])$ups
+)
+
+logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            #"sgd_batch","sgd_batch_condition",
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+logFC$ups <- as.factor(logFC$ups)
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                #"sgd_batch","sgd_batch_condition", 
+                                                "DAE", "VAE", "CF", "KNN", "original"))
+
+logFC_p2 <- logFC %>% ggplot(aes(x = method, y = log2FC, fill = ups)) +
+    geom_boxplot() +
+    geom_hline(yintercept = log2(2.22 / 0.74), color = "red") + theme_bw()
+logFC_p2
+
+logFC <- data.frame(
+    SGD = rowData(pe_sce[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    # sgd_batch = rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    # sgd_batch_condition = rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    ups = rowData(pe_sce[["msqrobAggregate"]])$ups
+)
+
+logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            #"sgd_batch","sgd_batch_condition", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+logFC$ups <- as.factor(logFC$ups)
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                #"sgd_mean", "sgd_batch","sgd_batch_condition",
+                                                "DAE", "VAE", "CF", "KNN", "original"))
+
+logFC_p3 <- logFC %>% ggplot(aes(x = method, y = log2FC, fill = ups)) +
+    geom_boxplot() +
+    geom_hline(yintercept = log2(6.67 / 2.22), color = "red") + theme_bw()
+
+logFC <- data.frame(
+    SGD = rowData(pe_sce[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    # sgd_batch = rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    # sgd_batch_condition = rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[colnames(LED)]][, 1],
+    ups = rowData(pe_sce[["msqrobAggregate"]])$ups
+)
+
+logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            #"sgd_batch","sgd_batch_condition", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+logFC$ups <- as.factor(logFC$ups)
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                #"sgd_batch","sgd_batch_condition", 
+                                                "DAE", "VAE", "CF", "KNN", "original"))
+
+logFC_p4 <- logFC %>% ggplot(aes(x = method, y = log2FC, fill = ups)) +
+    geom_boxplot() +
+    geom_hline(yintercept = log2(20 / 6.67), color = "red") + theme_bw()
+
+
+
+saveRDS(object = logFC_p1, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/logFC_p1.RDS")
+saveRDS(object = logFC_p2, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/logFC_p2.RDS")
+saveRDS(object = logFC_p3, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/logFC_p3.RDS")
+saveRDS(object = logFC_p4, file = "~/Projects/Doctoraat/SGDImputationPaper/Analyses/CPTEx_nolab1/Output/logFC_p4.RDS")
+
+ggpubr::ggarrange(logFC_p1, logFC_p2, logFC_p3, logFC_p4, 
+                  common.legend = T, legend = "bottom")
+```
+

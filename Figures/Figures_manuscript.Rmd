@@ -1,0 +1,1528 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-09-02"
+---
+# Packages
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(fullRankMatrix)
+library(limma)
+library(RColorBrewer)
+library(tidyverse)
+library(readr)
+devtools::load_all(here("omicsGMF"))
+
+```
+
+
+```{r}
+
+myColors <- c("#BC3C29FF",  "#E18727FF", "#E18727FF",
+              "#4269D0FF","#20854EFF", "#A463F2FF",
+              "#97BBF5FF", "#6CC5B0FF", "#7876B1FF",
+              "#9498A0FF","#9C6B4EFF",
+              "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
+              "black")
+names(myColors) <- c("SGD", "SGD Batch", "SGD Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE-CV","VAE-CV", "CF-CV",
+                     "NIPALS",
+                      "KNN", "QRILC","zero", "minimum",
+                     "no imputation")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+colScale_fill <- scale_fill_manual(name = "Method",values = myColors)
+
+```
+
+
+
+# CPTAC Visualisation 
+
+```{r}
+sce <- readRDS(file = here("Data/CPTAC_data/CPTAC_sce.RDS"))
+sgd <- readRDS(file = here("Analyses/CPTAC/Output/sgd_sce.RDS"))
+
+
+KNN <- readRDS(file = here("Analyses/CPTAC/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/CPTAC/Output/nipals_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/CPTAC/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/CPTAC/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/CPTAC/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+
+QRILC <- readRDS(file = here("Analyses/CPTAC/Output/qrilc_sce.RDS"))
+
+zero <- readRDS(file = here("Analyses/CPTAC/Output/zero_sce.RDS"))
+
+minimum <- readRDS(file = here("Analyses/CPTAC/Output/minimum_sce.RDS"))
+
+```
+
+```{r}
+lab <- rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+sce_CPTAC <- sce
+```
+
+
+## PCA plots
+
+
+```{r}
+DAE_PC <- prcomp(DAE, rank = 2)
+VAE_PC <- prcomp(VAE, rank = 2)
+CF_PC <- prcomp(CF, rank = 2)
+
+KNN_PC <- prcomp(KNN, rank = 2)
+QRILC_PC <- prcomp(QRILC, rank = 2)
+zero_PC <- prcomp(zero, rank = 2)
+minimum_PC <- prcomp(minimum, rank = 2)
+
+titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+
+```
+
+
+```{r}
+
+
+plot_CPTAC_all <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+         aes(x = PC1,y = PC2, col = colData(sce_CPTAC)$condition, shape = lab) ) +
+    geom_point(size = 2.5) + xlab("PC1") + ggtitle(titles[i]) + 
+    theme_bw() + labs(col = "Condition") + scale_shape_manual(values=c("lab1" = 16,"lab2" = 17,"lab3" = 15)) + 
+    theme(legend.position = "right") + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+})
+
+
+
+pltCPTACPanel1 <- ggpubr::ggarrange(plot_CPTAC_all[[1]], plot_CPTAC_all[[2]], plot_CPTAC_all[[3]], 
+                                    plot_CPTAC_all[[4]], plot_CPTAC_all[[5]], plot_CPTAC_all[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+pltCPTACPanel1_nolegend <- ggpubr::ggarrange(plot_CPTAC_all[[1]], plot_CPTAC_all[[2]], plot_CPTAC_all[[3]], 
+                                    plot_CPTAC_all[[4]], plot_CPTAC_all[[5]], plot_CPTAC_all[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+
+pltCPTACPanel1_all <- ggpubr::ggarrange(plot_CPTAC_all[[1]], plot_CPTAC_all[[2]], plot_CPTAC_all[[3]], 
+                                    plot_CPTAC_all[[4]], plot_CPTAC_all[[5]], plot_CPTAC_all[[6]],
+                                    plot_CPTAC_all[[7]], plot_CPTAC_all[[8]], plot_CPTAC_all[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+
+legend_pltCPTACPanel1 <- as_ggplot(get_legend(plot_CPTAC_all[[1]]))
+
+
+
+ggsave(plot = pltCPTACPanel1_all, filename = here("Figures/visualisations_CPTAC_all_labs_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+# CPTAC visualisation no lab1
+
+```{r}
+sce <- readRDS(file = here("Data/CPTAC_nolab1/CPTAC_sce.RDS"))
+sce_CPTAC_nolab1 <- sce
+sgd <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/sgd_sce.RDS"))
+
+
+KNN <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/nipals_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/CPTAC_nolab1/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/CPTAC_nolab1/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/CPTAC_nolab1/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+
+QRILC <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/qrilc_sce.RDS"))
+
+zero <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/zero_sce.RDS"))
+
+minimum <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/minimum_sce.RDS"))
+
+```
+
+```{r}
+lab_subset <- rep(rep(paste0("lab",2:3),each=3),5) %>% factor(levels = c("lab1", "lab2", "lab3"))
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce_CPTAC_nolab1)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+colData(sce_CPTAC_nolab1)$lab <- lab_subset
+
+```
+
+
+## PCA plots
+
+
+```{r}
+DAE_PC <- prcomp(DAE, rank = 2)
+VAE_PC <- prcomp(VAE, rank = 2)
+CF_PC <- prcomp(CF, rank = 2)
+
+KNN_PC <- prcomp(KNN, rank = 2)
+QRILC_PC <- prcomp(QRILC, rank = 2)
+zero_PC <- prcomp(zero, rank = 2)
+minimum_PC <- prcomp(minimum, rank = 2)
+
+titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+
+```
+
+
+```{r}
+
+plot_CPTAC <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = colData(sce_CPTAC_nolab1)$condition, shape = colData(sce_CPTAC_nolab1)$lab) ) +
+  geom_point(size = 2.5) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() + labs(col = "Condition:  ", shape = "lab: ") + scale_shape_manual(values=c("lab1" = 16,"lab2" = 17,"lab3" = 15)) + 
+  theme(legend.position = "right", legend.text = element_text(size = 12), legend.title = element_text(size = 12)) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+})
+
+pltCPTACPanel2 <- ggpubr::ggarrange(plot_CPTAC[[1]], plot_CPTAC[[2]], plot_CPTAC[[3]], 
+                                    plot_CPTAC[[4]], plot_CPTAC[[5]], plot_CPTAC[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+pltCPTACPanel2_nolegend <- ggpubr::ggarrange(plot_CPTAC[[1]], plot_CPTAC[[2]], plot_CPTAC[[3]], 
+                                    plot_CPTAC[[4]], plot_CPTAC[[5]], plot_CPTAC[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+
+pltCPTACPanel2_all <- ggpubr::ggarrange(plot_CPTAC[[1]], plot_CPTAC[[2]], plot_CPTAC[[3]], 
+                                    plot_CPTAC[[4]], plot_CPTAC[[5]], plot_CPTAC[[6]],
+                                    plot_CPTAC[[7]], plot_CPTAC[[8]], plot_CPTAC[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+
+
+
+ggsave(plot = pltCPTACPanel2_all, filename = here("Figures/visualisations_CPTAC_nolab1_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+```
+
+
+
+# Petrosius
+
+## importing data
+```{r}
+sce <- readRDS(file = here("Data/Petrosius/petrosius_sce.RDS"))
+sce_Petrosius <- sce
+sgd <- readRDS(file = here("Analyses/Petrosius/Output/sgd_sce.RDS"))
+
+sgd_batch <- readRDS(file = here("Analyses/Petrosius/Output/sgd_batch_sce.RDS"))
+
+
+KNN <- readRDS(file = here("Analyses/Petrosius/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Petrosius/Output/nipals_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/Petrosius/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/Petrosius/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Petrosius/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+
+QRILC <- readRDS(file = here("Analyses/Petrosius/Output/qrilc_sce.RDS"))
+
+zero <- readRDS(file = here("Analyses/Petrosius/Output/zero_sce.RDS"))
+
+minimum <- readRDS(file = here("Analyses/Petrosius/Output/minimum_sce.RDS"))
+
+```
+
+## PCA plots
+### PCAs
+
+```{r}
+DAE_PC <- prcomp(DAE, rank = 8)
+VAE_PC <- prcomp(VAE, rank = 8)
+CF_PC <- prcomp(CF, rank = 8)
+
+KNN_PC <- prcomp(KNN, rank = 8)
+QRILC_PC <- prcomp(QRILC, rank = 8)
+zero_PC <- prcomp(zero, rank = 8)
+minimum_PC <- prcomp(minimum, rank = 8)
+
+titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+
+```
+
+### PCA plot Sampletype
+
+```{r}
+
+Petrosius_pca_plot_sampletype <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, color = as.factor(colData(sce_Petrosius)$SampleType))) +
+  geom_point(alpha = 0.5) + scale_colour_manual(values = c("purple3","orange")) +
+    xlab("PC1") + 
+    ggtitle(titles[i]) + 
+  theme_bw() + 
+    labs(col = "Treatment:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+          legend.position = "right") + guides(color = guide_legend(override.aes = list(alpha = 1))) 
+})
+
+
+#BPCA not converged
+
+Petrosius_pca_plot_sampletype_1 <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[[1]], Petrosius_pca_plot_sampletype[[2]], Petrosius_pca_plot_sampletype[[3]], 
+                                    Petrosius_pca_plot_sampletype[[4]], Petrosius_pca_plot_sampletype[[5]], Petrosius_pca_plot_sampletype[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+Petrosius_pca_plot_sampletype_1_no_legend <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[[1]], Petrosius_pca_plot_sampletype[[2]], Petrosius_pca_plot_sampletype[[3]], 
+                                    Petrosius_pca_plot_sampletype[[4]], Petrosius_pca_plot_sampletype[[5]], Petrosius_pca_plot_sampletype[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+Petrosius_pca_plot_sampletype_2 <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[[1]], Petrosius_pca_plot_sampletype[[2]], Petrosius_pca_plot_sampletype[[3]], 
+                                    Petrosius_pca_plot_sampletype[[4]], Petrosius_pca_plot_sampletype[[5]], Petrosius_pca_plot_sampletype[[6]],
+                                    Petrosius_pca_plot_sampletype[[7]], Petrosius_pca_plot_sampletype[[8]], Petrosius_pca_plot_sampletype[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+legend_pca_plot_sampletype <- as_ggplot(get_legend(Petrosius_pca_plot_sampletype[[1]]))
+
+```
+
+
+```{r}
+ggsave(plot = Petrosius_pca_plot_sampletype_1, filename = here("Figures/visualisations_Petrosius.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(plot = Petrosius_pca_plot_sampletype_2, filename = here("Figures/visualisations_Petrosius_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
+Petrosius_pca_plot_batch_corrected <- 
+  ggplot(data = sgd_batch, 
+       aes(x = PC1,y = PC2, color = as.factor(colData(sce_Petrosius)$SampleType))) +
+  geom_point(alpha = 0.5) + scale_colour_manual(values = c("purple3","orange")) +
+    xlab("PC1") + 
+    ggtitle("SGD Treatment") + 
+  theme_bw() + 
+    labs(col = "Treatment:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+          legend.position = "right") + guides(color = guide_legend(override.aes = list(alpha = 1))) 
+
+
+petrosius_pca_batchvsnobatch <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[[1]], Petrosius_pca_plot_batch_corrected,
+                        ncol = 2, align = "h", common.legend = TRUE, legend = "bottom")
+```
+
+
+```{r}
+ggsave(plot = petrosius_pca_batchvsnobatch, filename = here("Figures/visualisations_Petrosius_batch_vs_no_batch.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+```
+
+
+### PCA plot missingness
+
+```{r}
+
+Petrosius_pca_plot_missing <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce))))) +
+  geom_point(alpha = 0.5)+ scale_colour_gradient2(name = "Proportion \nmissing",
+  low = ("red"),
+  mid = "grey",
+  high = ("blue"),
+  midpoint = 0.6,
+  space = "Lab",
+  na.value = "grey50",
+  transform = "identity",
+  guide = "colourbar",
+  aesthetics = "colour"
+) + xlab("PC1") + ggtitle(titles[i])  +
+  theme_bw() #+ labs(col = "Proportion missing")
+  })
+
+
+
+Petrosius_pca_plot_missing_1 <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]], 
+                                    Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+Petrosius_pca_plot_missing_1_no_legend <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]], 
+                                    Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+Petrosius_pca_plot_missing_2 <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]], 
+                                    Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]],
+                                    Petrosius_pca_plot_missing[[7]], Petrosius_pca_plot_missing[[8]], Petrosius_pca_plot_missing[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+legend_pca_plot_missing <- as_ggplot(get_legend(Petrosius_pca_plot_missing[[1]]))
+
+
+
+ggsave(plot = Petrosius_pca_plot_missing_1, filename = here("Figures/visualisations_Petrosius_missing.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(plot = Petrosius_pca_plot_missing_2, filename = here("Figures/visualisations_Petrosius_missing_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+
+```
+
+### Correlation plots
+```{r}
+
+cor_sgd <- cor(x = colMeans(is.na(assay(sce))), y = sgd[,1])
+cor_DAE <- cor(x = colMeans(is.na(assay(sce))), y = DAE_PC$x[,1])
+cor_VAE <- cor(x = colMeans(is.na(assay(sce))), y = VAE_PC$x[,1])
+cor_CF <- cor(x = colMeans(is.na(assay(sce))), y = CF_PC$x[,1])
+cor_nipals <- cor(x = colMeans(is.na(assay(sce))), y = nipals$scores[,1])
+cor_knn <- cor(x = colMeans(is.na(assay(sce))), y = KNN_PC$x[,1])
+cor_qrilc <- cor(x = colMeans(is.na(assay(sce))), y = QRILC_PC$x[,1])
+cor_zero <- cor(x = colMeans(is.na(assay(sce))), y = zero_PC$x[,1])
+cor_minimum <- cor(x = colMeans(is.na(assay(sce))), y = minimum_PC$x[,1])
+
+
+cor_sgd_2 <- cor(x = colMeans(is.na(assay(sce))), y = sgd[,2])
+cor_DAE_2 <- cor(x = colMeans(is.na(assay(sce))), y = DAE_PC$x[,2])
+cor_VAE_2 <- cor(x = colMeans(is.na(assay(sce))), y = VAE_PC$x[,2])
+cor_CF_2 <- cor(x = colMeans(is.na(assay(sce))), y = CF_PC$x[,2])
+cor_nipals_2 <- cor(x = colMeans(is.na(assay(sce))), y = nipals$scores[,2])
+cor_knn_2 <- cor(x = colMeans(is.na(assay(sce))), y = KNN_PC$x[,2])
+cor_qrilc_2 <- cor(x = colMeans(is.na(assay(sce))), y = QRILC_PC$x[,2])
+cor_zero_2 <- cor(x = colMeans(is.na(assay(sce))), y = zero_PC$x[,2])
+cor_minimum_2 <- cor(x = colMeans(is.na(assay(sce))), y = minimum_PC$x[,2])
+
+
+cor_sgd_spearman <- cor(x = colMeans(is.na(assay(sce))), y = sgd[,1], method = "spearman")
+cor_DAE_spearman <- cor(x = colMeans(is.na(assay(sce))), y = DAE_PC$x[,1], method = "spearman")
+cor_VAE_spearman <- cor(x = colMeans(is.na(assay(sce))), y = VAE_PC$x[,1], method = "spearman")
+cor_CF_spearman <- cor(x = colMeans(is.na(assay(sce))), y = CF_PC$x[,1], method = "spearman")
+cor_nipals_spearman <- cor(x = colMeans(is.na(assay(sce))), y = nipals$scores[,1], method = "spearman")
+cor_knn_spearman <- cor(x = colMeans(is.na(assay(sce))), y = KNN_PC$x[,1], method = "spearman")
+cor_qrilc_spearman <- cor(x = colMeans(is.na(assay(sce))), y = QRILC_PC$x[,1], method = "spearman")
+cor_zero_spearman <- cor(x = colMeans(is.na(assay(sce))), y = zero_PC$x[,1], method = "spearman")
+cor_minimum_spearman <- cor(x = colMeans(is.na(assay(sce))), y = minimum_PC$x[,1], method = "spearman")
+
+
+cor_sgd_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = sgd[,2], method = "spearman")
+cor_DAE_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = DAE_PC$x[,2], method = "spearman")
+cor_VAE_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = VAE_PC$x[,2], method = "spearman")
+cor_CF_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = CF_PC$x[,2], method = "spearman")
+cor_nipals_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = nipals$scores[,2], method = "spearman")
+cor_knn_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = KNN_PC$x[,2], method = "spearman")
+cor_qrilc_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = QRILC_PC$x[,2], method = "spearman")
+cor_zero_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = zero_PC$x[,2], method = "spearman")
+cor_minimum_2_spearman <- cor(x = colMeans(is.na(assay(sce))), y = minimum_PC$x[,2], method = "spearman")
+
+df_cor <- data.frame("correlation" = c(cor_sgd, cor_DAE, cor_VAE, cor_CF, cor_nipals, cor_knn, cor_qrilc, cor_zero, cor_minimum,
+                                       cor_sgd_2, cor_DAE_2, cor_VAE_2, cor_CF_2, cor_nipals_2, cor_knn_2, cor_qrilc_2, cor_zero_2, cor_minimum_2,
+                                       cor_sgd_spearman, cor_DAE_spearman, cor_VAE_spearman, cor_CF_spearman, cor_nipals_spearman, cor_knn_spearman,
+                                       cor_qrilc_spearman, cor_zero_spearman, cor_minimum_spearman,
+                                       cor_sgd_2_spearman, cor_DAE_2_spearman, cor_VAE_2_spearman, cor_CF_2_spearman, cor_nipals_2_spearman, 
+                                       cor_knn_2_spearman, cor_qrilc_2_spearman, cor_zero_2_spearman, cor_minimum_2_spearman),
+                     "method" = rep(c("SGD","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"), times = 4),
+                     "PC" = rep(c("PC1","PC2"), each = 9),
+                     "cormethod" = c(rep(c("Pearson", "Spearman"), each = 18)))
+df_cor$method <- factor(df_cor$method, levels = c("SGD","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"))
+
+plt1Panel2 <- ggplot(df_cor %>% filter(method %in% c("SGD", "DAE","VAE", "CF", "NIPALS", "KNN")), 
+                     aes(x = PC, y = abs(correlation), fill = method)) +
+  geom_bar(stat = "identity", position = position_dodge()) + facet_wrap(~cormethod, ncol = 2) + 
+  ylab("Correlation with \nmissingness") + theme_bw() + theme(axis.title.x = element_blank()) + colScale_fill
+
+
+supplt <- ggplot(df_cor, 
+                     aes(x = PC, y = abs(correlation), fill = method)) +
+  geom_bar(stat = "identity", position = position_dodge()) + facet_wrap(~cormethod, ncol = 2) + 
+  ylab("Correlation with \nmissingness") + theme_bw() + theme(axis.title.x = element_blank()) + colScale_fill
+
+
+ggsave(plot = supplt, filename = here("Figures/visualisations_correlations_all_Petrosius.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+```
+
+
+
+# Leduc
+## importing data
+
+
+```{r}
+sce <- readRDS(file = here("Data/leduc2022_pSCoPE_data/leduc_sce.RDS"))
+sgd <- readRDS(file = here("Analyses/Leduc/Output/sgd_sce.RDS"))
+
+sgd_batch <- readRDS(file = here("Analyses/Leduc/Output/sgd_batch_sce.RDS"))
+sgd_batch[,1] <- - sgd_batch[,1]
+sgd_batch[,2] <- - sgd_batch[,2]
+
+KNN <- readRDS(file = here("Analyses/Leduc/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Leduc/Output/nipals_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/Leduc/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/Leduc/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Leduc/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+
+QRILC <- readRDS(file = here("Analyses/Leduc/Output/qrilc_sce.RDS"))
+
+zero <- readRDS(file = here("Analyses/Leduc/Output/zero_sce.RDS"))
+
+minimum <- readRDS(file = here("Analyses/Leduc/Output/minimum_sce.RDS"))
+
+
+
+
+```
+
+```{r}
+subcluster <- rep(NA, ncol(sce))
+subcluster[is.na(colData(sce)$MelanomaSubCluster)] <- "Monocyte    "
+subcluster[colData(sce)$MelanomaSubCluster == "A"] <- "Melanoma A    "
+subcluster[colData(sce)$MelanomaSubCluster == "B"] <- "Melanoma B    "
+subcluster <- as.factor(subcluster)
+
+```
+
+```{r}
+nipals_imputed <- t(assay(sce))
+nipals_imputed[is.na(nipals_imputed)] <- nipals$fitted[is.na(nipals_imputed)]
+
+```
+
+## PCA plots
+
+
+```{r}
+DAE_PC <- prcomp(DAE, rank = 40)
+VAE_PC <- prcomp(VAE, rank = 40)
+CF_PC <- prcomp(CF, rank = 40)
+
+KNN_PC <- prcomp(KNN, rank = 40)
+QRILC_PC <- prcomp(QRILC, rank = 40)
+zero_PC <- prcomp(zero, rank = 40)
+minimum_PC <- prcomp(minimum, rank = 40)
+
+titles <- c("SGD Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+MF <- list(sgd_batch, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+
+
+```
+
+
+### PCA plots subcluster no batch correction
+```{r}
+
+Leduc_pca_plot_no_batch_correction <- lapply(1:9, function(i){
+ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = subcluster)) +
+  geom_point(alpha = 0.5) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() + labs(col = "Celltype:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+          legend.position = "right") + guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+    scale_colour_manual(name = "Cell type", 
+                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF")) 
+
+})
+
+
+
+Leduc_pca_plot_no_batch_correction_1 <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]],
+                                                          Leduc_pca_plot_no_batch_correction[[2]],
+                                                          Leduc_pca_plot_no_batch_correction[[3]], 
+                                                          Leduc_pca_plot_no_batch_correction[[4]],
+                                                          Leduc_pca_plot_no_batch_correction[[5]],
+                                                          Leduc_pca_plot_no_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+Leduc_pca_plot_no_batch_correction_1_no_legend <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]], Leduc_pca_plot_no_batch_correction[[2]],
+                                                                    Leduc_pca_plot_no_batch_correction[[3]], 
+                                    Leduc_pca_plot_no_batch_correction[[4]], Leduc_pca_plot_no_batch_correction[[5]], Leduc_pca_plot_no_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+Leduc_pca_plot_no_batch_correction_2 <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]], Leduc_pca_plot_no_batch_correction[[2]],
+                                                          Leduc_pca_plot_no_batch_correction[[3]], 
+                                    Leduc_pca_plot_no_batch_correction[[4]], Leduc_pca_plot_no_batch_correction[[5]], Leduc_pca_plot_no_batch_correction[[6]],
+                                    Leduc_pca_plot_no_batch_correction[[7]], Leduc_pca_plot_no_batch_correction[[8]], Leduc_pca_plot_no_batch_correction[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+legend_Leduc_pca_plot_no_batch_correction <- as_ggplot(get_legend(Leduc_pca_plot_no_batch_correction[[1]]))
+
+
+
+ggsave(plot = Leduc_pca_plot_no_batch_correction_2, filename = here("Figures/visualisations_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+## PCA plots Batch correction
+### PCA
+```{r}
+design <- model.matrix(~Set+Channel, colData(sce))
+fmX <- make_full_rank_matrix(design)
+X <- fmX$matrix
+
+
+DAE_correction <- lmFit(t(DAE), design = X)
+VAE_correction <- lmFit(t(VAE), design = X)
+CF_correction <- lmFit(t(CF), design = X)
+
+KNN_correction <- lmFit(t(KNN), design = X)
+nipals_correction <- lmFit(t(nipals_imputed), design = X)
+QRILC_correction <- lmFit(t(QRILC), design = X)
+zero_correction <- lmFit(t(zero), design = X)
+minimum_correction <- lmFit(t(minimum), design = X)
+
+
+resids_DAE_correction <- t(DAE) - 
+  t(DAE_correction$design %*% t(DAE_correction$coefficients))
+resids_VAE_correction <- t(VAE) - 
+  t(VAE_correction$design %*% t(VAE_correction$coefficients))
+resids_CF_correction <- t(CF) - 
+  t(CF_correction$design %*% t(CF_correction$coefficients))
+resids_KNN_correction <- t(KNN) - 
+  t(KNN_correction$design %*% t(KNN_correction$coefficients))
+resids_nipals_correction <- t(nipals_imputed) - 
+  t(nipals_correction$design %*% t(nipals_correction$coefficients))
+resids_QRILC_correction <- t(QRILC) - 
+  t(QRILC_correction$design %*% t(QRILC_correction$coefficients))
+resids_zero_correction <- t(zero) - 
+  t(zero_correction$design %*% t(zero_correction$coefficients))
+resids_minimum_correction <- t(minimum) - 
+  t(minimum_correction$design %*% t(minimum_correction$coefficients))
+
+
+
+
+DAE_correction_PCs <- prcomp(t(resids_DAE_correction), rank = 10)
+VAE_correction_PCs <- prcomp(t(resids_VAE_correction), rank = 10)
+CF_correction_PCs <- prcomp(t(resids_CF_correction), rank = 10)
+
+KNN_correction_PCs <- prcomp(t(resids_KNN_correction), rank = 10)
+nipals_correction_PCs <- prcomp(t(resids_nipals_correction), rank = 10)
+QRILC_correction_PCs <- prcomp(t(resids_QRILC_correction), rank = 10)
+zero_correction_PCs <- prcomp(t(resids_zero_correction), rank = 10)
+minimum_correction_PCs <- prcomp(t(resids_minimum_correction), rank = 10)
+
+
+  titles <- c("SGD Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+  MF <- list(sgd_batch, DAE_correction_PCs$x, VAE_correction_PCs$x, KNN_correction_PCs$x, 
+             nipals_correction_PCs$x, KNN_correction_PCs$x, QRILC_correction_PCs$x,
+             zero_correction_PCs$x, minimum_correction_PCs$x)
+
+```
+
+
+### PCA plots subcluster batch correction
+```{r}
+Leduc_pca_plot_batch_correction <- lapply(1:9, function(i){
+ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = subcluster)) +
+  geom_point(alpha = 0.5) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() + labs(col = "Cell type:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12)) +
+    guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF"))
+
+})
+
+
+
+Leduc_pca_plot_batch_correction_1 <- ggpubr::ggarrange(Leduc_pca_plot_batch_correction[[1]], Leduc_pca_plot_batch_correction[[2]],
+                                                          Leduc_pca_plot_batch_correction[[3]], 
+                                    Leduc_pca_plot_batch_correction[[4]], Leduc_pca_plot_batch_correction[[5]], Leduc_pca_plot_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+Leduc_pca_plot_batch_correction_1_legend <- ggpubr::ggarrange(Leduc_pca_plot_batch_correction[[1]], Leduc_pca_plot_batch_correction[[2]],
+                                                                    Leduc_pca_plot_batch_correction[[3]], 
+                                    Leduc_pca_plot_batch_correction[[4]], Leduc_pca_plot_batch_correction[[5]], Leduc_pca_plot_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+Leduc_pca_plot_batch_correction_2 <- ggpubr::ggarrange(Leduc_pca_plot_batch_correction[[1]], Leduc_pca_plot_batch_correction[[2]],
+                                                          Leduc_pca_plot_batch_correction[[3]], 
+                                    Leduc_pca_plot_batch_correction[[4]], Leduc_pca_plot_batch_correction[[5]], Leduc_pca_plot_batch_correction[[6]],
+                                    Leduc_pca_plot_batch_correction[[7]], Leduc_pca_plot_batch_correction[[8]], Leduc_pca_plot_batch_correction[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+legend_leduc_pca_plot_batch_correction_sampletype <- as_ggplot(get_legend(Leduc_pca_plot_batch_correction[[1]]))
+
+
+ggsave(plot = Leduc_pca_plot_batch_correction_2, filename = here("Figures/visualisations_batch_correction_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+
+```{r}
+Introduction_Figure <- ggarrange(
+  Petrosius_pca_plot_sampletype[[4]]+ 
+    theme(legend.position = "bottom", legend.text = element_text(size = 7), legend.title = element_text(size = 7), 
+          legend.key.size = unit(0.1, "cm"), legend.box.margin =  margin(l = -1, unit = "cm")) + ggtitle("") ,
+  
+  Leduc_pca_plot_no_batch_correction[[4]]+ theme(legend.position = "bottom",
+                                                 legend.text = element_text(size = 7), legend.title = element_text(size = 7), 
+                                                 legend.key.size = unit(0.1, "cm"), legend.box.margin =  margin(l = -1, unit = "cm")) +
+    ggtitle("") + guides(col=guide_legend(nrow=2,byrow=TRUE, override.aes = list(alpha = 1))),
+  plot_CPTAC[[4]]+ labs(col = "Condition:", shape = "lab: ") + 
+    theme(legend.position = "bottom", legend.text = element_text(size = 7), legend.title = element_text(size = 7),
+          legend.key.size = unit(0.1, "cm"), legend.box = "vertical" , 
+          legend.spacing.y = unit(0, "lines"), legend.box.margin =  margin(l = -1, unit = "cm")) + ggtitle("") + 
+    guides(col=guide_legend(nrow=1,byrow=TRUE, order = 1), shape = guide_legend(nrow = 1)),
+  ncol = 3, widths = c(1/3, 1/3, 1/3), align = "hv", labels = "AUTO")
+
+
+
+
+ggsave(plot = Introduction_Figure, filename = here("Figures/Introduction_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+
+
+Visualisation_Figure <- 
+  ggarrange(
+    ggarrange(
+      ggarrange(Petrosius_pca_plot_sampletype[[1]] + theme(legend.position = "none"),
+                Petrosius_pca_plot_sampletype[[4]]+ theme(legend.position = "none"),
+                Petrosius_pca_plot_sampletype[[6]]+ theme(legend.position = "none"), 
+                ncol = 3, widths = c(1/3, 1/3, 1/3)),
+      ggarrange(Leduc_pca_plot_no_batch_correction[[1]]+ theme(legend.position = "none"),
+                Leduc_pca_plot_no_batch_correction[[4]]+ theme(legend.position = "none"),
+                Leduc_pca_plot_no_batch_correction[[6]]+ theme(legend.position = "none"), 
+                ncol = 3, widths = c(1/3, 1/3, 1/3)),
+      ggarrange(
+        plot_CPTAC_all[[1]]+ theme(legend.position = "none"), 
+        plot_CPTAC_all[[4]]+ theme(legend.position = "none"),
+        plot_CPTAC_all[[6]]+ theme(legend.position = "none"), 
+                ncol = 3, widths = c(1/3, 1/3, 1/3)), 
+        ggarrange(plot_CPTAC[[1]]+ theme(legend.position = "none"),
+        plot_CPTAC[[4]]+ theme(legend.position = "none"),
+        plot_CPTAC[[6]]+ theme(legend.position = "none"),
+        ncol = 3, widths = c(1/3, 1/3, 1/3)),
+      nrow = 4, 
+      align = "hv", 
+      heights = c(0.25, 0.25, 0.25, 0.25), 
+      labels = list("A", "B", "C","D"), 
+      legend = "none"),
+    ggarrange(as_ggplot(get_legend(Petrosius_pca_plot_sampletype[[1]] + labs(col = "Treatment") + 
+                                     theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+                                           legend.key.size = unit(0.2, "cm"), legend.margin = margin(0, 0, 0, 0), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1, unit = "cm")))),
+              as_ggplot(get_legend(Leduc_pca_plot_no_batch_correction[[1]] + labs(col = "Celltype") + 
+                                     theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+                                           legend.key.size = unit(0.2, "cm"), legend.margin = margin(0, 0, 0, 0), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1, unit = "cm")))),
+              as_ggplot(get_legend(plot_CPTAC_all[[1]]+ 
+                                     theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+                                           legend.key.size = unit(0.2, "cm"), legend.margin = margin(0, 0, 0, 0), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1, unit = "cm")))), 
+              nrow = 3, 
+              align= "hv",
+              heights = c(0.25, 0.25, 0.5)),
+    ncol = 2, widths = c(0.8, 0.2)
+)
+
+ggsave(plot = Visualisation_Figure, filename = here("Figures/Visualisation_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+# Imputation plot
+```{r}
+df_imputation_Petrosius <- readRDS(file = here("Analyses","Petrosius", "Output", "imputation_results_Petrosius.RDS"))
+df_imputation_Leduc <- readRDS(file = here("Analyses","Leduc", "Output", "imputation_results_Leduc.RDS"))
+colnames(df_imputation_Petrosius)[4] <- "missing_type"
+colnames(df_imputation_Leduc)[4] <- "missing_type"
+
+```
+
+```{r}
+df_summarised_Petrosius <- df_imputation_Petrosius %>% group_by(MNAR, method, missing_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE))
+
+df_summarised_Leduc <- df_imputation_Leduc %>% group_by(MNAR, method, missing_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE))
+
+df_summarised_Petrosius$missing_type <- factor(df_summarised_Petrosius$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+df_summarised_Petrosius$method <- factor(df_summarised_Petrosius$method, levels = c("SGD","SGD Batch", 
+                                              "DAE-NN", "DAE-NN-default", 
+                                              "VAE-NN", "VAE-NN-default",
+                                              "CF-NN", "CF-NN-default",
+                                              "NIPALS", "knnmethod", 
+                                              "BPCA","QRILC","zero","minimum"), 
+                                     labels = c("SGD","SGD Treatment", 
+                                              "DAE-CV", "DAE", 
+                                              "VAE-CV", "VAE",
+                                              "CF-CV", "CF",
+                                              "NIPALS", "KNN", 
+                                              "BPCA","QRILC","zero","minimum"))
+
+
+df_summarised_Leduc$missing_type <- factor(df_summarised_Leduc$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+df_summarised_Leduc$method <- factor(df_summarised_Leduc$method, levels = c("SGD","SGD Mean shift","SGD Batch", "SGD Batch Mean shift",
+                                              "DAE-NN", "DAE-NN-default", 
+                                              "VAE-NN", "VAE-NN-default",
+                                              "CF-NN", "CF-NN-default",
+                                              "NIPALS", "knnmethod", 
+                                              "BPCA","QRILC","zero","minimum"), 
+                                     labels = c("SGD","SGD Mean shift","SGD Batch", "SGD Batch Mean shift",
+                                              "DAE-CV", "DAE", 
+                                              "VAE-CV", "VAE",
+                                              "CF-CV", "CF",
+                                              "NIPALS", "KNN", 
+                                              "BPCA","QRILC","zero","minimum"))
+```
+
+
+```{r}
+Petrosius_imputation_plot <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD","SGD Treatment", 
+                                              "DAE", "VAE", "CF", 
+                                              "NIPALS", "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type") + ylab("MAE")
+
+
+Leduc_imputation_plot <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              "NIPALS" ,"KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE")
+
+
+ggsave(plot = Petrosius_imputation_plot, filename = here("Figures/imputation_Petrosius.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+ggsave(plot = Leduc_imputation_plot, filename = here("Figures/imputation_Leduc.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+```
+
+```{r}
+Petrosius_imputation_plot_CV <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD","SGD Treatment", 
+                                              "DAE", "VAE", "CF", 
+                                              "DAE-CV", "VAE-CV", "CF-CV")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale + labs(shape = "Missing type") + ylab("MAE")
+
+
+Leduc_imputation_plot_CV <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              "DAE-CV", "VAE-CV", "CF-CV")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale + labs(shape = "Missing type") + ylab("MAE")
+
+
+
+Petrosius_and_Leduc_imputation_CV <- ggarrange(Petrosius_imputation_plot_CV , 
+          Leduc_imputation_plot_CV, 
+          nrow = 2, common.legend = T, legend = "right")
+
+
+ggsave(plot = Petrosius_and_Leduc_imputation_CV, filename = here("Figures/imputation_default_vs_crossvd_Petrosius_and_Leduc.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+```{r}
+Petrosius_imputation_plot_all <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD", "SGD Treatment",  
+                      "DAE", "VAE", "CF", 
+                     "NIPALS",
+                     "KNN", "QRILC","zero","minimum")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale+ labs(shape = "Missing type") + ylab("MAE")
+
+
+Leduc_imputation_plot_all <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD", "SGD Batch",  
+                      "DAE", "VAE", "CF", 
+                     "NIPALS",
+                     "KNN", "QRILC","zero","minimum")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale+ labs(shape = "Missing type") + ylab("MAE")
+
+
+Petrosius_and_Leduc_imputation_plot_all <- ggarrange(Petrosius_imputation_plot_all, 
+          Leduc_imputation_plot_all, 
+          nrow = 2, common.legend = T, legend = "right")
+
+ggsave(plot = Petrosius_imputation_plot_all, filename = here("Figures/imputation_Petrosius_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+ggsave(plot = Leduc_imputation_plot_all, filename = here("Figures/imputation_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+ggsave(plot = Petrosius_and_Leduc_imputation_plot_all, filename = here("Figures/imputation_Petrosius_and_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+# Imputation CPTAC
+
+```{r}
+df_imputation_CPTAC_all <- readRDS(file = here("Analyses","CPTAC", "Output", "imputation_results_CPTAC.RDS"))
+df_imputation_CPTAC_nolab1 <- readRDS(file = here("Analyses","CPTAC_nolab1", "Output", "imputation_results_CPTAC_nolab1.RDS"))
+df_imputation_CPTAC_lab1 <- readRDS(file = here("Analyses","CPTAC", "Output", "imputation_results_CPTAC_lab1.RDS"))
+```
+
+```{r}
+df_summarised_CPTAC_all<- df_imputation_CPTAC_all %>% group_by(MNAR, method, missing_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE))
+
+df_summarised_CPTAC_nolab1 <- df_imputation_CPTAC_nolab1 %>% group_by(MNAR, method, missing_type) %>% 
+  summarise(meanMAE = mean(MAE),sdMAE = sd(MAE))
+
+df_summarised_CPTAC_lab1 <- df_imputation_CPTAC_lab1 %>% group_by(MNAR, method, missing_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE))
+
+
+df_summarised_CPTAC_all$missing_type <- factor(df_summarised_CPTAC_all$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+
+df_summarised_CPTAC_all$method <- factor(df_summarised_CPTAC_all$method, levels = c("SGD","SGD Batch",
+                                              "DAE-NN", "DAE-default-NN", 
+                                              "VAE-NN", "VAE-default-NN",
+                                              "CF-NN", "CF-default-NN",
+                                              "NIPALS", "KNN", 
+                                              "QRILC","zero","minimum"), 
+                                     labels = c("SGD","SGD Batch",
+                                              "DAE-CV", "DAE", 
+                                              "VAE-CV", "VAE",
+                                              "CF-CV", "CF",
+                                              "NIPALS", "KNN", 
+                                              "QRILC","zero","minimum"))
+
+df_summarised_CPTAC_nolab1$missing_type <- factor(df_summarised_CPTAC_nolab1$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+df_summarised_CPTAC_nolab1$method <- factor(df_summarised_CPTAC_nolab1$method, levels = c("SGD","SGD Batch", 
+                                              "DAE-NN", "DAE-NN-default", 
+                                              "VAE-NN", "VAE-NN-default",
+                                              "CF-NN", "CF-NN-default",
+                                              "NIPALS", "knnmethod", 
+                                              "QRILC","zero","minimum"), 
+                                     labels = c("SGD","SGD Batch", 
+                                              "DAE-CV", "DAE", 
+                                              "VAE-CV", "VAE",
+                                              "CF-CV", "CF",
+                                              "NIPALS", "KNN", 
+                                              "QRILC","zero","minimum"))
+
+df_summarised_CPTAC_lab1$missing_type <- factor(df_summarised_CPTAC_lab1$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+df_summarised_CPTAC_lab1$method <- factor(df_summarised_CPTAC_lab1$method, levels = c("SGD","SGD Batch",
+                                              "DAE-NN", "DAE-default-NN", 
+                                              "VAE-NN", "VAE-default-NN",
+                                              "CF-NN", "CF-default-NN",
+                                              "NIPALS", "KNN", 
+                                              "QRILC","zero","minimum"), 
+                                     labels = c("SGD","SGD Batch",
+                                              "DAE-CV", "DAE", 
+                                              "VAE-CV", "VAE",
+                                              "CF-CV", "CF",
+                                              "NIPALS", "KNN", 
+                                              "QRILC","zero","minimum"))
+```
+
+
+
+```{r}
+CPTAC_all_labs_imputation_plot <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                               "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol = 5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type") + ylab("MAE") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+
+CPTAC_all_labs_imputation_plot_all <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                               "KNN", "QRILC","zero","minimum")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol = 5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type") + ylab("MAE") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+
+CPTAC_nolab1_imputation_plot <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  ylab("MAE") +
+theme(plot.title = element_text(size = 12, 
+                                   face = "bold", 
+                                 margin = margin(0,0,10,0))) + 
+    theme(axis.text.x = element_blank()) + colScale + labs(shape = "Missing type") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+
+CPTAC_nolab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              #"DAE-NN-default", "VAE-NN-default", "CF-NN-default",
+                                              "KNN", "QRILC","zero","minimum")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  ylab("MAE") +
+theme(plot.title = element_text(size = 12, 
+                                   face = "bold", 
+                                 margin = margin(0,0,10,0))) + 
+    theme(axis.text.x = element_blank()) + colScale + labs(shape = "Missing type") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+
+CPTAC_only_lab1_imputation_plot <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+CPTAC_only_lab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("SGD","SGD Batch", 
+                                              "DAE", "VAE", "CF", 
+                                              "KNN", "QRILC","zero","minimum")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE") +
+  guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
+
+
+
+ggsave(plot = CPTAC_all_labs_imputation_plot, filename = here("Figures/imputation_CPTAC_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+ggsave(plot = CPTAC_nolab1_imputation_plot, filename = here("Figures/imputation_CPTAC_nolab1.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+ggsave(plot = CPTAC_only_lab1_imputation_plot, filename = here("Figures/imputation_CPTAC_lab1.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+
+ggsave(plot = CPTAC_all_labs_imputation_plot_all, filename = here("Figures/imputation_CPTAC_all_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+ggsave(plot = CPTAC_nolab1_imputation_plot_all, filename = here("Figures/imputation_CPTAC_nolab1_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+ggsave(plot = CPTAC_only_lab1_imputation_plot_all, filename = here("Figures/imputation_CPTAC_lab1_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+```
+
+# Distribution plots CPTAC no lab1
+
+
+```{r}
+sce <- readRDS(file =  here("Data","CPTAC_nolab1", "CPTAC_sce.RDS"))
+
+sgd <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/sgd_sce.RDS"))
+DAE <- read.csv(file = here("Analyses","CPTAC_nolab1", "Output", "DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses","CPTAC_nolab1", "Output", "VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+CF <- read.csv(file = here("Analyses","CPTAC_nolab1", "Output", "CF_default_sce.csv"),
+                  header = T, row.names = 1)
+knn <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/knnmethod_sce.RDS"))
+```
+
+```{r}
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+original_assay <- sce %>%
+  assay %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = is.na(intensity))
+
+```
+
+
+
+```{r}
+reconstructed_sgd <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))[rownames(sce),]
+
+reconstructed_assay <- reconstructed_sgd %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+sgd_imputed_assay <- original_assay
+sgd_imputed_assay[is.na(sgd_imputed_assay$intensity),] <- reconstructed_assay[is.na(sgd_imputed_assay$intensity),]
+  
+
+
+DAE_assay <- t(DAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+VAE_assay <- t(VAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+CF_assay <- t(CF) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+knn_assay <- t(knn) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+
+```
+
+
+```{r}
+data_all <- rbind(original_assay, sgd_imputed_assay, DAE_assay, VAE_assay, CF_assay, knn_assay)
+data_all$origin <- factor(rep(c("original", "Imputed_SGD","DAE","VAE", "CF", "KNN"), 
+                        each = nrow(original_assay)), 
+                        levels = c("original", "Imputed_SGD","DAE","VAE", "CF","KNN"),
+                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
+lab <- substr(data_all$sample, 14, stop = 14)
+lab[lab %in% c("1","2","3")] <- "lab_1"
+lab[lab %in% c("4","5","6")] <- "lab_2"
+lab[lab %in% c("7","8","9")] <- "lab_3"
+data_all$lab <- lab
+```
+
+```{r}
+
+
+
+Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed"))) & !(origin %in% c("SGD_reconstructed"))), 
+  aes(x = condition, y = intensity, col = condition)) + 
+  geom_violin() + 
+  facet_wrap(~origin, ncol = 3) +
+  labs(col = "Condition") + 
+  #ylim(c(-10,10)) + 
+  theme_bw() + 
+  ylab("Intensity") + 
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 14)) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+Imputation_distribution_nonUPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed"))) & !(origin %in% c("SGD_reconstructed"))), 
+  aes(x = condition, y = intensity, col = condition)) + 
+  geom_violin() + 
+  facet_wrap(~origin, ncol = 3) +
+  labs(col = "Condition") + 
+  #ylim(c(-10,10)) + 
+  theme_bw() + 
+  ylab("Intensity") + 
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 14)) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+
+ggsave(plot = Imputation_distribution_UPS_nolab1, filename = here("Figures/Imputation_distribution_UPS_nolab1.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+ggsave(plot = Imputation_distribution_nonUPS_nolab1, filename = here("Figures/Imputation_distribution_nonUPS_nolab1.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+CPTAC_manuscript_plot_imputation <- ggarrange(CPTAC_nolab1_imputation_plot, Imputation_distribution_UPS_nolab1, nrow = 2,
+                                              align= "v", heights = c(0.55, 0.45), labels = "AUTO")
+
+
+ggsave(plot = CPTAC_manuscript_plot_imputation, filename = here("Figures/CPTAC_manuscript_plot_imputation.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
+Imputation_Figure <- 
+  ggarrange(
+    ggarrange(
+      ggarrange(
+        Petrosius_imputation_plot + theme(legend.position = "none"), 
+        Leduc_imputation_plot + theme(legend.position = "none"), 
+        nrow = 2, legend = "none", labels= list("A","B")),
+      get_legend(Petrosius_imputation_plot), ncol = 2, align= "hv", widths = c(0.8, 0.2)), 
+    Imputation_distribution_UPS_nolab1_final, nrow = 2,
+    align= "v", heights = c(0.6, 0.4), labels = list("", "C"))
+
+
+
+ggsave(plot = Imputation_Figure, filename = here("Figures/Imputation_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+```
+
+
+# Distribution plots CPTAC 
+
+
+```{r}
+sce <- readRDS(file =  here("Data","CPTAC_data", "CPTAC_sce.RDS"))
+
+sgd <- readRDS(file = here("Analyses/CPTAC/Output/sgd_sce.RDS"))
+DAE <- read.csv(file = here("Analyses","CPTAC", "Output", "DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses","CPTAC", "Output", "VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+CF <- read.csv(file = here("Analyses","CPTAC", "Output", "CF_default_sce.csv"),
+                  header = T, row.names = 1)
+knn <- readRDS(file = here("Analyses/CPTAC/Output/knnmethod_sce.RDS"))
+```
+
+```{r}
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+original_assay <- sce %>%
+  assay %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = is.na(intensity))
+
+```
+
+
+
+```{r}
+reconstructed_sgd <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))[rownames(sce),]
+
+reconstructed_assay <- reconstructed_sgd %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+sgd_imputed_assay <- original_assay
+sgd_imputed_assay[is.na(sgd_imputed_assay$intensity),] <- reconstructed_assay[is.na(sgd_imputed_assay$intensity),]
+  
+
+
+DAE_assay <- t(DAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+VAE_assay <- t(VAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+CF_assay <- t(CF) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+knn_assay <- t(knn) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+
+```
+
+
+```{r}
+data_all <- rbind(original_assay, sgd_imputed_assay, DAE_assay, VAE_assay, CF_assay, knn_assay)
+data_all$origin <- factor(rep(c("original", "Imputed_SGD","DAE","VAE", "CF", "KNN"), 
+                        each = nrow(original_assay)), 
+                        levels = c("original", "Imputed_SGD","DAE","VAE", "CF","KNN"),
+                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
+lab <- substr(data_all$sample, 14, stop = 14)
+lab[lab %in% c("1","2","3")] <- "lab_1"
+lab[lab %in% c("4","5","6")] <- "lab_2"
+lab[lab %in% c("7","8","9")] <- "lab_3"
+data_all$lab <- lab
+```
+
+```{r}
+Distribution_CPTAC_UPS_observed_missingness <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(origin %in% c("Observed")) %>% group_by(sample, condition) %>% summarise(mispercent = mean(missing)) , 
+  aes(x = sample, y = mispercent, col = condition)) + 
+  geom_point() + 
+  facet_wrap(~rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor, ncol = 3) +
+  theme_bw() +
+  #ylim(c(-10,10)) + 
+  #ggtitle("Missing percentages per sample for spiked-in proteins") + 
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 14)) + 
+  ylim(c(0,1))+ 
+  ylab("Proportion of missing values")+
+  ggtitle("Proportion of missing values for spiked-in human peptides")+ 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+Distribution_CPTAC_non_UPS_observed_missingness <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(origin %in% c("Observed")) %>% group_by(sample, condition) %>% summarise(mispercent = mean(missing)) , 
+  aes(x = sample, y = mispercent, col = condition)) + 
+  geom_point() + 
+  facet_wrap(~rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor, ncol = 3) +
+  theme_bw() +
+  #ylim(c(-10,10)) + 
+  #ggtitle("Missing percentages per sample for spiked-in proteins") + 
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 14)) + 
+  ylim(c(0,1)) +
+  ylab("Proportion of missing values")+
+  ggtitle("Proportion of missing values for spiked-in human peptides")+ 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+legend_distribution_missing_CPTAC <- as_ggplot(get_legend(Distribution_CPTAC_non_UPS_observed_missingness + labs(col = "Condition")))
+
+
+plot_distribution_missingness_CPTAC <- ggarrange(ggarrange(Distribution_CPTAC_UPS_observed_missingness,Distribution_CPTAC_non_UPS_observed_missingness, 
+          legend = "none", nrow = 2), legend_distribution_missing_CPTAC, ncol = 2, widths = c(0.8,0.2))
+
+ggsave(plot = plot_distribution_missingness_CPTAC, filename = here("Figures/distribution_missingness_CPTAC.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+```{r}
+imputation_plot_per_lab_UPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("SGD-imputed", "CF-imputed")) | (origin =="Observed"))), 
+  aes(x = condition, y = intensity, col = condition)) + 
+  geom_violin() + 
+  facet_wrap(~lab*origin, ncol = 3) +
+  theme_bw() + 
+  #ylim(c(-10,10)) + 
+  ggtitle("Imputed intensities of spiked-in \nhuman peptides") + labs(col = "Condition")+ 
+  theme(legend.position = "bottom", legend.title = element_text(size = 10), legend.text = element_text(size = 10)) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+imputation_plot_per_lab_nonUPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("SGD-imputed", "CF-imputed")) | (origin =="Observed"))), 
+  aes(x = condition, y = intensity, col = condition)) + 
+  geom_violin() + 
+  facet_wrap(~lab*origin, ncol = 3) +
+  theme_bw() + 
+  #ylim(c(-10,10)) + 
+  ggtitle("Imputed intensities of background \nyeast peptides")+ 
+  labs(col = "Condition")+ 
+  theme(legend.position = "bottom", legend.title = element_text(size = 10), legend.text = element_text(size = 10)) + 
+    scale_colour_manual(name = "Condition", 
+                        values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+                                   "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+legend_imputationperlab <- as_ggplot(get_legend(imputation_plot_per_lab_UPS))
+
+imputation_plot_per_lab <- ggarrange(ggarrange(imputation_plot_per_lab_UPS, imputation_plot_per_lab_nonUPS, legend = "none", ncol = 2), 
+                                     legend_imputationperlab, heights = c(0.9, 0.1), nrow = 2)+ 
+  theme(legend.position = "bottom", legend.title = element_text(size = 10), legend.text = element_text(size = 10)) 
+
+
+ggsave(plot = imputation_plot_per_lab_UPS, filename = here("Figures/imputation_plot_per_lab_UPS.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(plot = imputation_plot_per_lab_nonUPS, filename = here("Figures/imputation_plot_per_lab_nonUPS.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(plot = imputation_plot_per_lab, filename = here("Figures/imputation_plot_per_lab.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+# CV plots
+
+```{r}
+leduc_cv <- readRDS(file = here("Analyses/Leduc/Output/crossval.RDS"))
+leduc_batch_cv <- readRDS(file = here("Analyses/Leduc/Output/crossval_batch.RDS"))
+
+petrosius_cv <- readRDS(file = here("Analyses/Petrosius/Output/crossval.RDS"))
+petrosius_batch_cv <- readRDS(file = here("Analyses/Petrosius/Output/crossval_batch.RDS"))
+
+cv_cptac <- readRDS(file = here("Analyses/CPTAC/Output/crossval.RDS"))
+cv_cptac_batch <- readRDS(file = here("Analyses/CPTAC/Output/crossval_batch.RDS"))
+cv_cptac_batch_condition <- readRDS(file = here("Analyses/CPTAC/Output/crossval_batch_condition.RDS"))
+
+
+```
+
+```{r}
+df_leduc <- data.frame("deviance" = c(c(leduc_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(leduc_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+	                       "ncomp" = c(c(leduc_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(leduc_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("No known covariates",  
+	                                        c(length(c(leduc_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                      rep(c("Known batch or treatment effects"), 
+	                                      each = length(c(leduc_batch_cv %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+	
+df_petrosius <- data.frame("deviance" = c(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(petrosius_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+	                       "ncomp" = c(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(petrosius_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("No known covariates",  
+	                                        c(length(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                      rep(c("Known batch or treatment effects"), 
+	                                      each = length(c(petrosius_batch_cv %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+	
+	
+
+	
+df_cptac <- data.frame("deviance" = c(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(cv_cptac_batch %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(cv_cptac_batch_condition %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+	                       "ncomp" = c(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(cv_cptac_batch %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(cv_cptac_batch_condition %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("No known covariates",  
+	                                        c(length(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                      rep(c("Known batch or treatment effects"), 
+	                                      each = length(c(cv_cptac_batch %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean)),
+	                                    rep(c("Known batch and spike-in effects"),
+	                                        each = length(c(cv_cptac_batch_condition %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+
+
+df_cv_all <- rbind(cbind(df_petrosius, "data" = "Petrosius"), cbind(df_leduc, "data" = "Leduc"), cbind(df_cptac, "data" = "CPTAC"))
+df_cv_all$data <- factor(df_cv_all$data, levels = c("Petrosius", "Leduc", "CPTAC"))
+df_cv_all$method <- factor(df_cv_all$method, levels = c("No known covariates", 
+                                                        "Known batch or treatment effects", 
+                                                        "Known batch and spike-in effects"))
+
+```
+
+```{r}
+cv_plot <- ggplot(data = df_cv_all,
+	       aes(x = ncomp, y = deviance, col = method)) +
+	  geom_point() + 
+	  geom_line() + 
+	  theme_bw() + 
+	  ylab("Mean out-of-sample deviances") + 
+	  xlab("Number of latent factors") + 
+	  scale_colour_manual(values = c("No known covariates" = "#BC3C29FF",
+	                                                 "Known batch or treatment effects" = 	"#4269D0FF",
+	                                                 "Known batch and spike-in effects" = "#20854EFF")) + 
+  facet_wrap(~data, scale = "free") + 
+  guides(colour = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom", legend.title = element_blank(), 
+        legend.key.height = unit(0.3, "cm"),legend.direction = "horizontal",
+        legend.box = "horizontal") 
+
+
+
+
+ggsave(plot = cv_plot, filename = here("Figures/cv_plot.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+```
+

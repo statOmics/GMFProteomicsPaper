@@ -1,0 +1,280 @@
+---
+title: 'Main vignette: dimensionality reduction with sgdGMF'
+author:
+- name: Alexandre Segers
+bibliography: sgdGMF.bib
+date: "14/01/2025"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_depth: 3
+  BiocStyle::pdf_document: default
+package: scSGDGMF
+abstract: |
+  Main vignette for the scSGDGMF package. This vignette aims to provide a 
+  detailed description of a matrix factorization done for RNA-seq and 
+  proteomics data.
+  Also, we show how to visualize the data, and how to impute missing values 
+  using this framework.
+vignette: >
+  %\VignetteIndexEntry{Main vignette: scSGDGMF}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+  
+```{r, echo = FALSE}
+library(knitr)
+```
+
+<!-- # Introduction -->
+
+<!-- `scSGDGMF` is a R package to perform generalized matrix factorization which -->
+<!-- can be used for dimensionality reduction and visualization of omics data, and  -->
+<!-- even for the imputation of missing values. It can deal with count data and missing values in a fast way, and therefore  -->
+<!-- does not require log-transformation of RNA-seq data or imputation of proteomics -->
+<!-- data such as conventional PCA. It can perform model selection to optimize the  -->
+<!-- number of latent confounders, i.e. the dimensionality of the reduced space.  -->
+<!-- `scSGDGMF` uses the `sgdGMF` package, but  -->
+<!-- provides easy wrappers for `SingleCellExperiment` and `SummarizedExperiment`  -->
+<!-- classes, with adapted default values of the parameters for omics data. -->
+
+<!-- All details about the `sgdGMF` model, such as the adaptive learning rates, -->
+<!-- exponential gradient averaging and subsampling of the data are  -->
+<!-- described in our preprint [@Castliglioni2024]. There, we show the use of  -->
+<!-- `sgdGMF` on single-cell RNA-seq data. In our other preprint [@Segers2025],  -->
+<!-- we show how this framework can be used to visualize and impute missing values  -->
+<!-- in (single-cell) proteomics data. -->
+
+<!-- In this vignette, we show how `scSGDGMF` can be easily used to obtain the -->
+<!-- dimensionality reduction of omics data, to visualize these samples and how to  -->
+<!-- impute missing values. It serves as an alternative to PCA when dealing with -->
+<!-- count or incomplete data, while remaining fast due to its stochastic  -->
+<!-- optimization algorithms. In total, there are four main functions: -->
+
+<!-- 1. `calculateSGD_cv` performs cross-validation to determine the optimal number -->
+<!-- of latent confounders. This avoids arbitrarily choosing `ncomponents`, but -->
+<!-- requires some computational time. An alternative is `calculateSGD_rank`, which -->
+<!-- performs an eigenvalue decomposition on the deviance residuals. This allows for -->
+<!-- model selection based on a scree plot using `screeplot_rank`, for example using -->
+<!-- the elbow method. -->
+
+<!-- 2. `runSGD` or `calculateSGD` estimates the latent confounders and the rotation -->
+<!-- matrix, and estimates the respective parameters of the sample-level and  -->
+<!-- feature-level covariates. -->
+
+<!-- 3. `plotSGD` plots the samples using its decomposition. -->
+
+<!-- 4. `SGDImpute` creates a new assay with missing values imputes using the  -->
+<!-- estimates of `runSGD`. -->
+
+
+<!-- We first show a standard workflow of `scSGDGMF` on RNA-seq data, followed by  -->
+<!-- a standard workflow on proteomics data. -->
+
+<!-- # Package installation -->
+
+<!-- `sgdGMF` can be installed through CRAN. -->
+<!-- `scSGDGMF` can be installed from Bioconductor with: -->
+
+<!-- ```{r, eval=FALSE} -->
+<!-- if(!requireNamespace("sgdGMF", quietly = TRUE)) -->
+<!--     install.packages("sgdGMF") -->
+
+<!-- if(!requireNamespace("BiocManager", quietly = TRUE)) -->
+<!--     install.packages("BiocManager") -->
+
+<!-- BiocManager::install("scSGDGMF") -->
+<!-- ``` -->
+
+
+<!-- ```{r, echo = TRUE, warning=FALSE, message=FALSE} -->
+<!-- library(sgdGMF) -->
+<!-- library(scSGDGMF) -->
+<!-- library(dplyr) -->
+<!-- library(scuttle) -->
+<!-- set.seed(100) -->
+<!-- ``` -->
+
+
+<!-- # RNA-seq analysis -->
+
+<!-- To perform dimensionality reduction on RNA-seq data, one can use the original -->
+<!-- count matrices, without normalizing or log-transforming the sequencing -->
+<!-- counts to the Gaussian scale. By using `family = poisson()`, `scSGDGMF`  -->
+<!-- optimizes the dimensionality reduction with respect to the likelihood of the -->
+<!-- Poisson family.  -->
+
+<!-- First, we simulate a small dataset using the `scuttle` package. -->
+
+<!-- ```{r} -->
+<!-- example_sce <- mockSCE(ncells = 20, ngenes = 500) -->
+<!-- ``` -->
+
+<!-- A recommended step is to estimate the optimal dimensionality in the model -->
+<!-- by using cross-validation. This cross-validation masks a proportion of the -->
+<!-- values as missing, and tries to reconstruct these. Using the out-of-sample  -->
+<!-- deviances, one can estimate the optimal dimensionality of the reduced space. -->
+<!-- This can be done with the `calculateSGD_cv` function, which uses  -->
+<!-- \link{sgdgmf.cv} from the `sgdGMF` package. Although flexibility regarding -->
+<!-- the optimization algorithm is possible, sensible default values are used. One -->
+<!-- should mainly choose the right distribution family (`family`) and the number -->
+<!-- of components in the dimensionality reduction for which the cross-validation is -->
+<!-- run (`ncomponents`). Also, one should select the right assay that is used for -->
+<!-- dimensionality reduction (`exprs_values` or `assay.type`). -->
+
+
+<!-- ```{r} -->
+<!-- cv <- calculateSGD_cv(example_sce,  -->
+<!--                       exprs_values="counts",  -->
+<!--                       family = poisson(),  -->
+<!--                       ncomponents = c(1:5), -->
+<!--                       ntop = 500) -->
+
+<!-- cv %>% group_by(ncomp) %>% summarise(mean_dev = mean(dev), -->
+<!--                                      mean_aic = mean(aic), -->
+<!--                                      mean_bic = mean(bic), -->
+<!--                                      mean_mae = mean(mae), -->
+<!--                                      mean_mse = mean(mse)) -->
+<!-- ``` -->
+
+<!-- If data are very large, or when having no idea which range of cross-validation  -->
+<!-- values to explore, one can also use a scree plot of the eigenvalues for model -->
+<!-- selection. This approach uses PCA on the deviance residuals to obtain the -->
+<!-- eigenvalues, which is an approximation to the real matrix factorization. -->
+<!-- This can be done using`runSGD_rank` or `calculateSGD_rank` followed -->
+<!-- by `plotSGD_rank` or `screeplot_rank` respectively. Note that now, the  -->
+<!-- `maxcomp` parameter should be defined, which is the number of  -->
+<!-- eigenvalues computed. -->
+
+<!-- ```{r} -->
+<!-- rank <- calculateSGD_rank(example_sce,  -->
+<!--                       exprs_values="counts",  -->
+<!--                       family = poisson(),  -->
+<!--                       maxcomp = 10, -->
+<!--                       ntop = 500) -->
+
+<!-- screeplot_rank(rank,maxcomp = 10) -->
+<!-- ``` -->
+
+
+
+<!-- After choosing which number of components to use in the final dimensionality -->
+<!-- reduction, `runSGD` or `calculateSGD` can be used. Again, one should select the -->
+<!-- distribution family (`family`), the dimensionality (`ncomponents`) and the  -->
+<!-- assay used (`exprs_values` or `assay.type`). Note that, differently compared to -->
+<!-- `runPCA`, by default all features are used. If this is not wanted, one can  -->
+<!-- for example choose the n most variable genes used with `ntop`.  -->
+<!-- `runSGD` returns the dimensionality -->
+<!-- reduction in the `reducedDim` argument of the `SingleCellExperiment`.  -->
+<!-- Additional information such as the `rotation` matrix, parameter estimates,  -->
+<!-- the optimization history of `sgdGMF` and many more are available in the  -->
+<!-- `attributes`. See \link{runSGD} for all outputs.  -->
+
+<!-- ```{r} -->
+<!-- example_sce <- runSGD(example_sce,  -->
+<!--                       exprs_values="counts",  -->
+<!--                       family = poisson(),  -->
+<!--                       ncomponents = 3, -->
+<!--                       ntop = 500) -->
+<!-- ``` -->
+
+<!-- After computing the matrix factorization, one can visualize the results with functions from the \link{scater} package. For example, using `plotReducedDim`, one obtains a PCA plot, using the latent factors obtained by `scSGDGMF`. The same plot can be obtained using the wrapper function `plotSGD`. -->
+
+<!-- ```{r} -->
+<!-- plotReducedDim(example_sce, dimred = "SGD") -->
+<!-- reducedDimNames(example_sce) -->
+<!-- head(reducedDim(example_sce)) -->
+<!-- ``` -->
+
+<!-- # Proteomics data analysis -->
+
+
+<!-- For the proteomics data analysis, we will simulate some artificial Gaussian data. Also, we introduce some missing values completely ad random. Note that on real data, one might have to perform log-transformation prior to computing the matrix factorization to make the intensities Gaussian distributed. Also, one can optionally opt to perform some normalization such as median-normalization. -->
+<!-- We store the simulated intensities in the `logintensities` assay of previously used `SingleCellExperiment`. -->
+
+<!-- ```{r} -->
+<!-- sim_intensities <- matrix(rnorm(n = prod(dim(example_sce)),  -->
+<!--                                 mean = 1, sd = 1), -->
+<!--                           nrow = nrow(example_sce)) -->
+<!-- NAs <- rbinom(n = prod(dim(sim_intensities)), size = 1, prob = 0.3) == 1 -->
+<!-- sim_intensities[NAs] <- NA -->
+
+<!-- colnames(sim_intensities) <- colnames(example_sce) -->
+<!-- rownames(sim_intensities) <- rownames(example_sce) -->
+
+<!-- assay(example_sce, 'logintensities') <- sim_intensities -->
+<!-- ``` -->
+
+<!-- We can again perform cross-validation to estimate the optimal dimensionality of the reduced space. Note that we select the assay `logintensities` and choose `family = gaussian()` to account for the Gaussian nature of the data. -->
+
+<!-- ```{r} -->
+<!-- cv_proteomics <- calculateSGD_cv(example_sce,  -->
+<!--                                  exprs_values="logintensities",  -->
+<!--                                  family = gaussian(),  -->
+<!--                                  ncomponents = c(1:5)) -->
+
+<!-- cv_proteomics %>% group_by(ncomp) %>% summarise(mean_dev = mean(dev), -->
+<!--                                                 mean_aic = mean(aic), -->
+<!--                                                 mean_bic = mean(bic), -->
+<!--                                                 mean_mae = mean(mae), -->
+<!--                                                 mean_mse = mean(mse)) -->
+<!-- ``` -->
+
+
+<!-- Again, we can choose to use a scree plot for model selection, calculating the -->
+<!-- eigenvalues with PCA on the deviance residuals. Note that missing values are  -->
+<!-- imputed here with the feature means. Therefore, when dealing with many missing -->
+<!-- values, using a scree plot for model selection might not be optimal, but  -->
+<!-- however remains a fast alternative to cross-validation. -->
+
+<!-- ```{r} -->
+<!-- rank_proteomics <- calculateSGD_rank(example_sce,  -->
+<!--                       exprs_values="logintensities",  -->
+<!--                       family = gaussian(), -->
+<!--                       maxcomp = 10) -->
+
+<!-- screeplot_rank(rank_proteomics, maxcomp = 10) -->
+<!-- ``` -->
+
+<!-- After choosing which number of components to use in the final dimensionality -->
+<!-- reduction, `runSGD` or `calculateSGD` can again be used. Again, one should select the -->
+<!-- distribution family (`family`), the dimensionality (`ncomponents`) and the  -->
+<!-- assay used (`exprs_values` or `assay.type`). If one wants to perform imputation  -->
+<!-- of missing values, one cannot use `ntop` or `subset_row` parameters, as parameters -->
+<!-- should be estimated for all features. Therefore, we keep `ntop = NULL` -->
+<!-- in this analysis. We store the dimensionality reduction of `logintensities` in  -->
+<!-- `SGD_logintensities`. -->
+
+<!-- ```{r} -->
+<!-- example_sce <- runSGD(example_sce,  -->
+<!--                       exprs_values="logintensities",  -->
+<!--                       family = gaussian(),  -->
+<!--                       ncomponents = 3, -->
+<!--                       name = "SGD_logintensities") -->
+<!-- ``` -->
+
+<!-- After computing the matrix factorization, one can again visualize the results with functions from the \link{scater} package.  -->
+
+<!-- ```{r} -->
+<!-- plotReducedDim(example_sce, dimred = "SGD_logintensities") -->
+<!-- reducedDimNames(example_sce) -->
+<!-- head(reducedDim(example_sce, type = "SGD_logintensities")) -->
+<!-- ``` -->
+
+<!-- Also, it is possible to impute the missing values with the mean estimates. This can be done with the `SGDImpute` function: -->
+
+<!-- ```{r} -->
+<!-- example_sce <- SGDImpute(example_sce,  -->
+<!--                          reducedDimName = "SGD_logintensities",  -->
+<!--                          exprs_values = "logintensities") -->
+
+
+<!-- assay(example_sce,'logintensities')[1:5,1:5] -->
+<!-- assay(example_sce,'logintensities_imputed')[1:5,1:5] -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- sessionInfo() -->
+<!-- ``` -->
+

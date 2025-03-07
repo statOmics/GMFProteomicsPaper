@@ -1,0 +1,139 @@
+
+
+# Full CPTAC study 
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(limma)
+library(QFeatures)
+library(plotly)
+library(gridExtra)
+library(msqrob2)
+library(here)
+```
+## Read data 
+
+```{r}
+pe <- readRDS(file = here("Data/CPTAC_data/CPTAC_QFeatures.RDS"))
+```
+
+## Design
+
+- We update the colData with information on the design
+
+```{r}
+colData(pe)$lab <- rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor
+colData(pe)$condition <- pe[["peptideRaw"]] %>% colnames %>% substr(12,12) %>% as.factor
+colData(pe)$spikeConcentration <- rep(c(A = 0.25, B = 0.74, C = 2.22, D = 6.67, E = 20),each = 9)
+
+pe <- pe[,colData(pe)$lab != "lab1"]
+```
+
+## Preprocessing
+
+### Log-transform
+
+- We calculate how many non zero intensities we have for each peptide and this can be useful for filtering.
+
+```{r}
+rowData(pe[["peptideRaw"]])$nNonZero <- rowSums(assay(pe[["peptideRaw"]]) > 0)
+```
+
+
+- Peptides with zero intensities are missing peptides and should be represent
+with a `NA` value rather than `0`.
+
+```{r}
+pe <- zeroIsNA(pe, "peptideRaw") # convert 0 to NA
+```
+
+- Logtransform data with base 2
+
+```{r}
+pe <- logTransform(pe, base = 2, i = "peptideRaw", name = "peptideLog")
+```
+
+
+### Filtering
+
+1. Handling overlapping protein groups
+
+In our approach a peptide can map to multiple proteins, as long as there is
+none of these proteins present in a smaller subgroup.
+
+```{r}
+pe <- filterFeatures(pe, ~ Proteins %in%
+                       msqrob2::smallestUniqueGroups(rowData(pe[["peptideLog"]])$Proteins))
+```
+
+2. Remove reverse sequences (decoys) and contaminants
+
+We now remove the contaminants, peptides that map to decoy sequences, and proteins
+which were only identified by peptides with modifications.
+
+```{r}
+pe <- filterFeatures(pe,~Reverse != "+")
+pe <- filterFeatures(pe,~ Potential.contaminant != "+")
+```
+
+3. Drop peptides that were only identified in one sample
+
+We keep peptides that were observed at last twice in 10% of the samples.
+
+```{r}
+pe <- filterNA(pe, i = "peptideLog", pNA = 0.9)
+nrow(pe[["peptideLog"]])
+```
+
+## Normalization 
+
+```{r}
+pe <- normalize(pe, 
+                i = "peptideLog", 
+                name = "peptideNorm", 
+                method = "center.median")
+```
+
+
+## Full dataset
+
+```{r}
+set.seed(100)
+sce <- pe[["peptideNorm"]]
+names(assays(sce)) <- "logintensities"
+```
+
+
+```{r}
+saveRDS(object = sce, file = here("Data","CPTAC_nolab1","CPTAC_sce.RDS"))
+write.csv(x = assay(sce,"logintensities"), file = here("Data","CPTAC_nolab1","CPTAC_sce.csv"))
+```
+
+
+## Imputation of NAs
+
+```{r}
+source(here("R-functions", "Impute_MAR_MNAR.R"))
+```
+
+```{r}
+set.seed(100)
+
+for(i in c(1:10)){
+  MISTOT10_MNAR25 <- imputation_NAs(data = assay(sce, "logintensities"), MISTOT = 0.1, MNAR = 0.25)
+  MISTOT10_MNAR50 <- imputation_NAs(data = assay(sce, "logintensities"), MISTOT = 0.1, MNAR = 0.50)
+  MISTOT10_MNAR75 <- imputation_NAs(data = assay(sce, "logintensities"), MISTOT = 0.1, MNAR = 0.75)
+
+  
+  saveRDS(MISTOT10_MNAR25, paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR25_",i,".RDS"))
+  saveRDS(MISTOT10_MNAR50, paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR50_",i,".RDS"))
+  saveRDS(MISTOT10_MNAR75, paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR75_",i,".RDS"))
+
+  write.csv(x = MISTOT10_MNAR25$data[rowMeans(is.na(MISTOT10_MNAR25$data)) < 1,], 
+            file = paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR25_",i,".csv"))
+  write.csv(x = MISTOT10_MNAR50$data[rowMeans(is.na(MISTOT10_MNAR50$data)) < 1,], 
+            file = paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR50_",i,".csv"))
+  write.csv(x = MISTOT10_MNAR75$data[rowMeans(is.na(MISTOT10_MNAR75$data)) < 1,], 
+            file = paste0(here("Data","CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR75_",i,".csv"))
+}
+```

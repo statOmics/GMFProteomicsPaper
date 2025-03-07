@@ -1,0 +1,396 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(here)
+library(scran)
+```
+
+```{r}
+MAE_calculation <- function(imputed, original){
+  mean(abs(imputed-original))
+}
+
+MEDAE_calculation <- function(imputed, original){
+  median(abs(imputed-original))
+}
+
+
+RSS_calculation <- function(imputed, original){
+  mean((imputed-original)^2)
+}
+
+reconstruct_sgd <- function(sgd, rownames = NULL){
+  
+  reconstructed <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))
+  if(!is.null(rownames)){
+    reconstructed <- reconstructed[rownames, ]
+  }
+  return(t(reconstructed))
+}
+
+
+reconstruct_sgd_mean_shift <- function(sgd, original, rownames = NULL){
+  
+  reconstructed <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))
+  if(!is.null(rownames)){
+    reconstructed <- reconstructed[rownames, ]
+  }
+  mean_original <- rowMeans(original, na.rm = T)
+  reconstructed_NAs <- reconstructed
+  reconstructed_NAs[is.na(original)] <- NA
+  mean_reconstructed_non_missing <- rowMeans(reconstructed_NAs, na.rm = T)
+  
+  reconstructed_mean_shift <- reconstructed + (mean_original - mean_reconstructed_non_missing)
+  
+  return(t(reconstructed_mean_shift))
+}
+
+
+reconstruct_nipals <- function(nipals){
+  
+  reconstructed <- nipals$fitted
+  
+  return(reconstructed)
+}
+```
+
+
+
+# MISTOT10 MNAR 0
+
+```{r}
+df_all <- data.frame("MNAR" = NULL,
+                     "MAE" = NULL,
+                     "MEDAE" = NULL,
+                     "method" = NULL)
+
+for(i in c("0","25","50","75","100")){
+  for(j in c(1:10)){
+    original <- readRDS(file =  here("Data","Ecoli_Human", "Ecoli_Human_sce.RDS"))
+  NAs <- readRDS(file  =  here("Data","Ecoli_Human", paste0("Ecoli_Human_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  original <- original[rowMeans(is.na(NAs$data)) < 1 ,]
+  
+  sgd <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+                             paste0("sgd_MISTOT10_MNAR", i, "_", j, ".RDS")))
+
+
+
+  sgd_reconstructed <- reconstruct_sgd(sgd, rownames = rownames(original))
+  sgd_reconstructed_mean_shift <- reconstruct_sgd_mean_shift(sgd, NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], rownames = rownames(original))
+  
+
+  # original <- readRDS(file =  here("Data","Ecoli_Human", "Ecoli_Human_sce.RDS"))
+  # NAs <- readRDS(file  =  here("Data","Ecoli_Human", 
+  #                              paste0("Ecoli_Human_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # 
+  # sgd <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+  #                            paste0("sgd_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # 
+  # original <- original[rownames(original)[rownames(original) %in%
+  #                                                               rownames(attr(sgd,"Beta"))] ,]
+  # 
+  # 
+  # 
+  # sgd_reconstructed <- reconstruct_sgd(sgd, 
+  #                                      rownames = rownames(original)[rownames(original) %in%
+  #                                                               rownames(attr(sgd,"Beta"))])
+  # sgd_reconstructed_mean_shift <- reconstruct_sgd_mean_shift(sgd, 
+  #                                                   NAs$data[rownames(NAs$data)[rownames(NAs$data) %in% rownames(attr(sgd,"Beta"))] ,],
+  #                                                   rownames = rownames(NAs$data)[rownames(NAs$data) %in% rownames(attr(sgd,"Beta"))])
+  # 
+  # 
+  # 
+  # 
+
+  DAE <- read.csv(file = here("Analyses","Ecoli_Human", "Output", 
+                              paste0("DAE_MISTOT10_MNAR", i,"_", j, ".csv")),
+                  header = T, row.names = 1)
+  
+
+  CF <- read.csv(file = here("Analyses","Ecoli_Human", "Output", 
+                              paste0("CF_MISTOT10_MNAR", i,"_", j, ".csv")),
+                  header = T, row.names = 1)
+  
+  VAE <- read.csv(file = here("Analyses","Ecoli_Human", "Output", 
+                              paste0("VAE_MISTOT10_MNAR", i,"_", j, ".csv")),
+                  header = T, row.names = 1)
+  
+  # bpca <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+  #                             paste0("bpca_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # knn <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+  #                             paste0("knnmethod_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # qrilc <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+  #                             paste0("qrilc_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # zero <- readRDS(file = here("Analyses","Ecoli_Human", "Output", 
+  #                             paste0("zero_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # minimum <- readRDS(file = here("Analyses","Ecoli_Human", "Output",  
+  #                             paste0("minimum_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  # nipals <- readRDS(file = here("Analyses","Ecoli_Human", "Output",  
+  #                             paste0("nipals_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  # nipals_reconstructed <- reconstruct_nipals(nipals)
+  
+  imputed_all <- t((NAs$MAR + NAs$MNAR)[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MAR <- t(NAs$MAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MNAR <- t(NAs$MNAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  # 
+  # imputed_all <- t((NAs$MAR + NAs$MNAR)[rownames(NAs$data)[rownames(NAs$data) %in% rownames(attr(sgd,"Beta"))] ,] == 1)
+  # imputed_MAR <- t(NAs$MAR[rownames(NAs$data)[rownames(NAs$data) %in% rownames(attr(sgd,"Beta"))] ,] == 1)
+  # imputed_MNAR <- t(NAs$MNAR[rownames(NAs$data)[rownames(NAs$data) %in% rownames(attr(sgd,"Beta"))] ,] == 1)
+
+  
+  # all methods that are included in sapply
+  methods <- list(sgd_reconstructed, sgd_reconstructed_mean_shift,
+                  DAE, CF, VAE)#, bpca, knn, qrilc, zero, minimum)
+  methods_names <- c("SGD", "SGD Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN")#,"BPCA", "KNN", "QRILC","zero","minimum")
+  
+  #MAE calculation
+  MAE_all <- sapply(methods, FUN = function(x){
+    MAE_calculation(imputed = x[imputed_all], 
+                    original = t(assay(original, "logintensities"))[imputed_all])
+  })
+  
+  # MAE_nipals_all <- MAE_calculation(imputed = 
+  #                 nipals_reconstructed[imputed_all[,
+  #                                   rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+  #               original = 
+  #                 t(assay(original,"logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                 colnames(nipals_reconstructed)][imputed_all[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                                                     colnames(nipals_reconstructed) ]])
+
+
+  MAE_MAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MAR],
+                  original = t(assay(original, "logintensities"))[imputed_MAR])
+  })
+  
+  # MAE_nipals_MAR <- MAE_calculation(imputed = 
+  #                 nipals_reconstructed[imputed_MAR[,
+  #                       rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+  #               original = t(assay(original,
+  #                   "logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                 colnames(nipals_reconstructed)][imputed_MAR[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                                                     colnames(nipals_reconstructed) ]])
+
+
+
+MAE_MNAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MNAR], 
+                  original = t(assay(original, "logintensities"))[imputed_MNAR])
+  })
+
+
+
+# MAE_nipals_MNAR <- MAE_calculation(imputed = 
+#                   nipals_reconstructed[imputed_MNAR[,
+#                             rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+#                 original = t(assay(original,
+#                     "logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+#                   colnames(nipals_reconstructed)][imputed_MNAR[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+#                                                       colnames(nipals_reconstructed) ]])
+
+# MEDAE calculation
+
+  MEDAE_all <- sapply(methods, FUN = function(x){
+    MEDAE_calculation(imputed = x[imputed_all], 
+                    original = t(assay(original, "logintensities"))[imputed_all])
+  })
+  
+  # MEDAE_nipals_all <- MEDAE_calculation(imputed = 
+  #                 nipals_reconstructed[imputed_all[,
+  #                                   rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+  #               original = 
+  #                 t(assay(original,"logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                 colnames(nipals_reconstructed)][imputed_all[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                                                     colnames(nipals_reconstructed) ]])
+
+
+  MEDAE_MAR <- sapply(methods, FUN = function(x){
+  MEDAE_calculation(imputed = x[imputed_MAR],
+                  original = t(assay(original, "logintensities"))[imputed_MAR])
+  })
+  
+  # MEDAE_nipals_MAR <- MEDAE_calculation(imputed = 
+  #                 nipals_reconstructed[imputed_MAR[,
+  #                       rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+  #               original = t(assay(original,
+  #                   "logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                 colnames(nipals_reconstructed)][imputed_MAR[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                                                     colnames(nipals_reconstructed) ]])
+
+
+
+  MEDAE_MNAR <- sapply(methods, FUN = function(x){
+    MEDAE_calculation(imputed = x[imputed_MNAR], 
+                    original = t(assay(original, "logintensities"))[imputed_MNAR])
+    })
+
+
+
+  # MEDAE_nipals_MNAR <- MEDAE_calculation(imputed = 
+  #                 nipals_reconstructed[imputed_MNAR[,
+  #                           rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in% colnames(nipals_reconstructed) ]], 
+  #               original = t(assay(original,
+  #                   "logintensities"))[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                 colnames(nipals_reconstructed)][imputed_MNAR[,rownames(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,]) %in%
+  #                                                     colnames(nipals_reconstructed) ]])
+
+  
+  df_loop <- data.frame(
+                     "MNAR" = i,
+                     "MAE" = c(MAE_all, #MAE_nipals_all, 
+                               MAE_MNAR, #MAE_nipals_MNAR,
+                               MAE_MAR), #, MAE_nipals_MAR),
+                     "MEDAE" = c(MEDAE_all, #MEDAE_nipals_all, 
+                               MEDAE_MNAR, #MEDAE_nipals_MNAR,
+                               MEDAE_MAR), #, MEDAE_nipals_MAR),
+                     "method" = rep(c(methods_names), times = 3), #, "NIPALS"), times = 3),
+                     "outlier_type" = rep(c("all","MNAR","MAR"), 
+                                          each = length(MEDAE_all)))#+1))
+  
+  
+  df_all <- rbind(df_all, df_loop)
+}
+
+}
+
+saveRDS(object = df_all, file = here("Analyses/Ecoli_Human/Output/df_all_analyses.RDS"))
+```
+
+```{r}
+df_all$MNAR <- factor(df_all$MNAR, levels = c("0","25","50","75","100"))
+df_all$method <- factor(df_all$method, 
+                        levels = c("SGD", "SGD Mean shift",
+                                   "DAE-NN", "CF-NN", "VAE-NN","BPCA", "KNN", "QRILC","zero","minimum"))
+
+
+df_summarised <- df_all %>% group_by(MNAR, method, outlier_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE),
+                                                meanMEDAE = mean(MEDAE),
+                                                sdMEDAE = sd(MEDAE))
+```
+
+```{r}
+library(RColorBrewer)
+myColors <- brewer.pal(10,"Set1")
+myColors <- c("red", "orange", 
+              "red3", "orange3", 
+              "red4", "orange4",
+              "blue", "green","cyan", "maroon", "orchid2", "purple", "deeppink", "pink")
+names(myColors) <- c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN",
+                     "BPCA", "KNN", "QRILC","zero","minimum")
+colScale <- scale_colour_manual(name = "method",values = myColors)
+```
+
+```{r}
+ggplot(df_all, aes(x = method, y = MAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank())+ colScale
+
+ggplot(df_all, aes(x = method, y = MEDAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank())+ colScale
+
+ggplot(df_all %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN", "knnmethod","BPCA")), 
+       aes(x = method, y = MAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  facet_wrap(~MNAR, scales = "free_y", ncol =5)+
+  theme_bw() + 
+  theme(axis.text.x = element_blank())+ colScale
+
+ggplot(df_all %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN", "knnmethod","BPCA")), 
+       aes(x = method, y = MEDAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+```
+```{r}
+ggplot(df_summarised, aes(x = method, y = meanMAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+ggplot(df_summarised, aes(x = method, y = meanMEDAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+ggplot(df_summarised %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN","BPCA", "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+ggplot(df_summarised %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN","BPCA", "KNN")),
+       aes(x = method, y = meanMEDAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMEDAE - sdMAE, ymax = meanMEDAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+
+ggplot(df_summarised %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN", "KNN")), 
+       aes(x = method, y = meanMAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+ggplot(df_summarised %>% filter(method %in% c("SGD", "SGD Mean shift", 
+                     "SGD Batch", "SGD Batch Mean shift", 
+                     "SGD Batch condition", "SGD Batch condition Mean shift",
+                     "DAE-NN", "CF-NN", "VAE-NN", "KNN")),
+       aes(x = method, y = meanMEDAE, col = method, shape = outlier_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMEDAE - sdMAE, ymax = meanMEDAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + colScale
+
+
+```
+

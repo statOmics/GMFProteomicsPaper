@@ -1,0 +1,179 @@
+
+
+```{r}
+library("scpdata")
+library(here)
+library(ggplot2)
+library("scp")
+
+files.sources = list.files(here("R-functions","scp-scplainer","R"))
+sapply(paste0(here("R-functions","scp-scplainer", "R",files.sources)), source)
+
+```
+
+
+```{r}
+set.seed(100)
+sce <- scpdata::petrosius2023_mES()
+```
+
+## Explore missing values
+
+```{r}
+cd <- colData(getWithColData(sce, "peptides"))
+sce <- QFeatures(list("peptides" = sce[["peptides"]]), colData = cd)
+```
+
+
+```{r}
+sce <- countUniqueFeatures(
+    sce, i = "peptides",
+    colDataName = "NumberPeptides"
+)
+
+
+MedianIntensity <- lapply(1, function(x) {
+    out <- colMedians(log(assay(sce[["peptides"]])), na.rm = TRUE)
+    names(out) <- colnames(x)
+    out
+})
+names(MedianIntensity) <- NULL
+MedianIntensity <- unlist(MedianIntensity)
+colData(sce)[, "MedianIntensity"] <- MedianIntensity
+
+```
+
+```{r}
+ggplot(colData(sce)) +
+    aes(
+        y = MedianIntensity,
+        x = NumberPeptides,
+        col = SampleType
+    ) +
+    geom_point(size = 2) #+
+    #scale_color_continuous(type = "viridis")
+
+
+
+ggplot(colData(sce)[colData(sce)$NumberPeptides>=750 & colData(sce)$MedianIntensity < 7.0,]) +
+    aes(
+        y = MedianIntensity,
+        x = NumberPeptides,
+        col = SampleType
+    ) +
+    geom_point(size = 2)
+```
+
+qf
+
+```{r}
+passQC <- colData(sce)$NumberPeptides>=750 & colData(sce)$MedianIntensity < 7.0
+sum(passQC)
+sce <- subsetByColData(sce, passQC)
+sce
+```
+
+
+## Data processing
+
+Processing steps already performed: 
+
+1. PSM QC: FDR, PIF, contaminants and decoy, SCR, cell total intensity.
+2. Reference normalization
+3. Remove duplicate PSM per peptide
+4. Zero is NA
+5. Cell QC based on CV
+
+For the remainder of this experiment, I keep peptides that have 
+at most 90% missing values, meaning they are observed in at least 10%
+of the cells. This removes a lot of peptides...
+
+```{r}
+sce <- filterNA(sce, i = "peptides", pNA = 0.9)
+sce
+```
+
+I also perform the following steps, some that I will compare against 
+each other
+
+1. Log2 transformation
+2. Median centering the cells
+
+```{r}
+## 1.
+colData(sce[["peptides"]]) <- NULL
+sce <- logTransform(sce, "peptides", name = "peptides_log2")
+## 2.
+
+sce <- scp:::normalizeSCP(
+    sce, i = "peptides_log2", method = "center.median",
+    name = "peptides_norm_samples"
+)
+```
+
+
+```{r}
+peptides <- getWithColData(sce, "peptides_norm_samples")
+names(assays(peptides)) <- "logintensities"
+```
+
+
+```{r}
+scprotein_assay <- assay(peptides,"logintensities")
+scprotein_assay[is.nan(scprotein_assay)] <- NA
+scprotein_assay <- (cbind(rowData(peptides)$PG.ProteinAccessions,rownames(scprotein_assay), scprotein_assay))
+colnames(scprotein_assay)[1:2] <- c("protein","peptide")
+rownames(scprotein_assay) <- NULL
+scprotein_assay <- as.data.frame(scprotein_assay)
+scprotein_assay[,3:ncol(scprotein_assay)] <- lapply(scprotein_assay[,3:ncol(scprotein_assay)], as.numeric)
+write.csv(x = scprotein_assay, 
+          file = here("Analyses/Petrosius/scProtein/data/Peptides-raw-train1.csv"), row.names = F)
+
+scprotein_assay <- scprotein_assay[,-1]
+colnames(scprotein_assay)[1] <- "protein"
+
+Cells <- colData(peptides)$SampleType
+cells_df <- rbind(Cells)
+colnames(cells_df) <- colnames(peptides)
+rownames(cells_df) <- c("celltype")
+```
+
+```{r}
+saveRDS(object = peptides, file = here("Data","Petrosius","petrosius_sce.RDS"))
+write.csv(x = assay(peptides,"logintensities"), file = here("Data","Petrosius","petrosius_sce.csv"))
+
+
+write.csv(x = scprotein_assay, file = here("Analyses/Petrosius/scProtein/data/Peptides-raw.csv"), 
+          row.names = F)
+write.csv(x = cells_df, file = here("Analyses/Petrosius/scProtein/data/Cells.csv"))
+```
+
+
+## Imputation of NAs
+
+```{r}
+source(here("R-functions", "Impute_MAR_MNAR.R"))
+```
+
+```{r}
+set.seed(100)
+
+for(i in c(1:10)){
+  
+MISTOT10_MNAR25 <- imputation_NAs(data = assay(peptides, "logintensities"), MISTOT = 0.1, MNAR = 0.25)
+MISTOT10_MNAR50 <- imputation_NAs(data = assay(peptides, "logintensities"), MISTOT = 0.1, MNAR = 0.50)
+MISTOT10_MNAR75 <- imputation_NAs(data = assay(peptides, "logintensities"), MISTOT = 0.1, MNAR = 0.75)
+
+saveRDS(MISTOT10_MNAR25, paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR25_", i, ".RDS"))
+saveRDS(MISTOT10_MNAR50, paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR50_", i, ".RDS"))
+saveRDS(MISTOT10_MNAR75, paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR75_", i, ".RDS"))
+
+write.csv(x = MISTOT10_MNAR25$data[rowMeans(is.na(MISTOT10_MNAR25$data)) < 1,], 
+          file = paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR25_", i, ".csv"))
+write.csv(x = MISTOT10_MNAR50$data[rowMeans(is.na(MISTOT10_MNAR50$data)) < 1,], 
+          file = paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR50_", i, ".csv"))
+write.csv(x = MISTOT10_MNAR75$data[rowMeans(is.na(MISTOT10_MNAR75$data)) < 1,], 
+          file = paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR75_", i, ".csv"))
+
+}
+```

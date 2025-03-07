@@ -1,0 +1,156 @@
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(here)
+library(scater)
+library(data.table)
+
+devtools::load_all(here("omicsGMF"))
+```
+
+```{r}
+MAE_calculation <- function(imputed, original){
+  mean(abs(imputed-original))
+}
+
+
+reconstruct_nipals <- function(nipals){
+  
+  reconstructed <- nipals$fitted
+  
+  return(reconstructed)
+}
+
+```
+
+
+
+
+```{r}
+df_all <- data.frame("MNAR" = NULL,
+                     "MAE" = NULL,
+                     "method" = NULL)
+
+for(i in c("25","50","75")){
+  for(j in c(1:10)){
+  original <- readRDS(file =  here("Data","Petrosius", "petrosius_sce.RDS"))
+  NAs <- readRDS(file  =  here("Data","Petrosius", paste0("petrosius_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  original <- original[rowMeans(is.na(NAs$data)) < 1 ,]
+    
+  sgd <- readRDS(file = here("Analyses","Petrosius", "Output", 
+                             paste0("sgd_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  sgd_batch <- readRDS(file = here("Analyses","Petrosius", "Output", 
+                             paste0("sgd_batch_MISTOT10_MNAR", i, "_", j, ".RDS")))
+
+  
+
+  sgd_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd))
+  sgd_batch_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd_batch))
+  
+
+  DAE <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("DAE_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  DAE_default <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("DAE_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  CF <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("CF_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  CF_default <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("CF_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  VAE <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("VAE_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  VAE_default <- as.matrix(data.table::fread(file = here("Analyses","Petrosius", "Output", 
+                              paste0("VAE_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  nipals <- readRDS(file = here("Analyses","Petrosius", "Output",
+                              paste0("nipals_MISTOT10_MNAR", i, "_", j,".RDS")))
+  nipals_reconstructed <- reconstruct_nipals(nipals)
+  
+
+  knnmethod <- readRDS(file = here("Analyses","Petrosius", "Output", 
+                              paste0("knnmethod_MISTOT10_MNAR", i, "_", j,".RDS")))
+  
+  qrilc <- readRDS(file = here("Analyses","Petrosius", "Output", 
+                              paste0("qrilc_MISTOT10_MNAR", i, "_", j, ".RDS")))
+
+  zero <- readRDS(file = here("Analyses","Petrosius", "Output", 
+                              paste0("zero_MISTOT10_MNAR", i, "_", j,".RDS")))
+  
+  minimum <- readRDS(file = here("Analyses","Petrosius", "Output",  
+                              paste0("minimum_MISTOT10_MNAR", i, "_", j,".RDS")))
+  
+
+  
+  imputed_all <- t((NAs$MAR + NAs$MNAR)[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MAR <- t(NAs$MAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MNAR <- t(NAs$MNAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+
+  
+  # all methods that are included in sapply
+  methods <- list(sgd_reconstructed, 
+                  sgd_batch_reconstructed,
+                  DAE, VAE, CF, DAE_default, VAE_default, CF_default, 
+                  nipals_reconstructed, knnmethod, qrilc, zero, minimum)
+  methods_names <- c("SGD", 
+                     "SGD Batch", 
+                     "DAE-NN", "VAE-NN", "CF-NN", 
+                     "DAE-NN-default", "VAE-NN-default", "CF-NN-default", 
+                     "NIPALS", "knnmethod", "QRILC", "zero","minimum")
+  
+  #MAE calculation
+  MAE_all <- sapply(methods, FUN = function(x){
+    MAE_calculation(imputed = x[imputed_all], 
+                    original = t(assay(original, "logintensities"))[imputed_all])
+  })
+
+  MAE_MAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MAR],
+                  original = t(assay(original, "logintensities"))[imputed_MAR])
+  })
+  
+
+
+MAE_MNAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MNAR], 
+                  original = t(assay(original, "logintensities"))[imputed_MNAR])
+  })
+
+
+
+  
+  df_loop <- data.frame(
+                     "MNAR" = i,
+                     "MAE" = c(MAE_all,
+                               MAE_MNAR,
+                               MAE_MAR), 
+                     "method" = rep(c(methods_names), times = 3),
+                     "outlier_type" = rep(c("all","MNAR","MAR"), 
+                                          each = length(MAE_all)))
+  
+  
+  df_all <- rbind(df_all, df_loop)
+}
+}
+
+
+df_all$MNAR <- factor(df_all$MNAR, levels = c("25","50","75"))
+df_all$method <- factor(df_all$method, 
+                        levels = c("SGD", 
+                     "SGD Batch", 
+                     "DAE-NN", "VAE-NN", "CF-NN", 
+                     "DAE-NN-default", "VAE-NN-default", "CF-NN-default", 
+                     "NIPALS", "knnmethod", "QRILC", "zero","minimum"))
+
+saveRDS(object = df_all, file = here("Analyses","Petrosius", "Output", "imputation_results_Petrosius.RDS"))
+
+```
+

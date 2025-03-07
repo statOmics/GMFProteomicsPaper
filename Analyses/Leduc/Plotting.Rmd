@@ -1,0 +1,322 @@
+---
+title: 'SGD CPTEx data'
+author: "Alex"
+date: "2024-07-18"
+output: html_document
+---
+
+
+```{r}
+library(here)
+library(sgdGMF)
+library(dplyr)
+library(RSpectra)
+library(scater)
+library(BiocParallel)
+library(BiocSingular)
+library(DelayedArray)
+
+devtools::load_all("/data/gent/vo/000/gvo00063/Alex/sgdFollowUp/sgdGMFWrapper/scaterSGD/R/runSGD.R")
+
+set.seed(100)
+```
+
+
+
+# Original data
+
+```{r}
+sce <- readRDS(file = here("Data","leduc2022_pSCoPE_data","leduc_sce.RDS"))
+
+```
+
+
+```{r}
+begin_time <- Sys.time()
+family <- gaussian()
+sgd <-  calculateSGD(sce, family = family, exprs_values = "logintensities", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 10, ntop = nrow(sce))
+end_time <- Sys.time()
+time_diff <- end_time - begin_time
+print(time_diff)
+
+```
+
+```{r}
+sgd_cov_lcbatch <-  calculateSGD(sce, family = family, X = model.matrix(~lcbatch, colData(sce)),
+                         exprs_values = "logintensities", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 10, ntop = nrow(sce))
+
+```
+
+```{r}
+sgd_cov_set <-  calculateSGD(sce, family = family, X = model.matrix(~Set, colData(sce)),
+                         exprs_values = "logintensities", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 10, ntop = nrow(sce))
+```
+
+```{r}
+library("scpdata")
+library("ggplot2")
+library("patchwork")
+library("scater")
+library("QFeatures")
+library("ProtGenerics")
+files.sources = list.files("/kyukon/data/gent/vo/000/gvo00063/Alex/PCA_proteomics/scp-scplainer/R")
+sapply(paste0("/kyukon/data/gent/vo/000/gvo00063/Alex/PCA_proteomics/scp-scplainer/R/",files.sources), source)
+```
+
+
+```{r}
+imputed_all <- impute(
+    sce,
+    MARGIN = 1, method = "knn", k = 15, rowmax = 1, colmax = 1, 
+    maxp = Inf
+)
+
+```
+```{r}
+lmknn_imputed <- lmFit(assays(imputed_all)[[1]], design = model.matrix(~lcbatch, colData(sce)))
+resids <- assays(imputed_all)[[1]] - t(lmknn_imputed$design %*% t(lmknn_imputed$coefficients))
+
+set_lmknn_imputed <- lmFit(assays(imputed_all)[[1]], design = model.matrix(~Set, colData(sce)))
+set_resids <- assays(imputed_all)[[1]] - t(set_lmknn_imputed$design %*% t(set_lmknn_imputed$coefficients))
+
+```
+
+```{r}
+pca_knn_imputed <- prcomp(t(assays(imputed_all)[[1]]))
+pca_knn_imputed_resids <- prcomp(t(resids))
+pca_knn_imputed_set_resids <- prcomp(t(set_resids))
+
+```
+
+```{r}
+celltypes <- colData(sce)$SampleType
+batch <- colData(sce)$lcbatch
+```
+
+```{r}
+sgd_cov_plot <- ggplot(data = data.frame("x" = sgd_cov_lcbatch[,1], "y" = sgd_cov_lcbatch[,2]), 
+                       aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2)) 
+
+sgd_cov_plot_2 <- ggplot(data = data.frame("x" = sgd_cov_lcbatch[,1], "y" = sgd_cov_lcbatch[,2]), 
+                         aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2)) +
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+sgd_cov_set_plot <- ggplot(data = data.frame("x" = sgd_cov_set[,1], "y" = sgd_cov_set[,2]), 
+                       aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2))
+
+sgd_cov_set_plot_2 <- ggplot(data = data.frame("x" = sgd_cov_set[,1], "y" = sgd_cov_set[,2]), 
+                         aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2))+
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+sgd_plot <- ggplot(data = data.frame("x" = sgd[,1], "y" = sgd[,2]), 
+                   aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2))
+
+sgd_plot_2 <- ggplot(data = data.frame("x" = sgd[,1], "y" = sgd[,2]), 
+                     aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2))+
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+knn_plot <- ggplot(data = data.frame("x" = pca_knn_imputed$x[,1], "y" = pca_knn_imputed$x[,2]), 
+                   aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2))
+
+knn_plot_2 <- ggplot(data = data.frame("x" = pca_knn_imputed$x[,1], "y" = pca_knn_imputed$x[,2]),
+                     aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2))+
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+knn_plot_resid <- ggplot(data = data.frame("x" = pca_knn_imputed_resids$x[,1], "y" = pca_knn_imputed_resids$x[,2]), aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2))
+
+knn_plot_resid_2 <- ggplot(data = data.frame("x" = pca_knn_imputed_resids$x[,1], "y" = pca_knn_imputed_resids$x[,2]), aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2))+
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+
+knn_plot_set_resid <- ggplot(data = data.frame("x" = pca_knn_imputed_set_resids$x[,1], "y" = pca_knn_imputed_set_resids$x[,2]), aes(x = x, y = y, col = celltypes)) +
+  geom_point(aes(alpha = 0.2))
+
+knn_plot_set_resid_2 <- ggplot(data = data.frame("x" = pca_knn_imputed_set_resids$x[,1], "y" = pca_knn_imputed_set_resids$x[,2]), aes(x = x, y = y, col = batch)) +
+  geom_point(aes(alpha = 0.2))+
+  scale_color_manual(values = c("A" = "black", "C" = "green3"))
+
+
+
+```
+
+```{r}
+sgd_cov_plot_2
+```
+
+```{r}
+
+fig <- 
+  (sgd_cov_set_plot &sgd_cov_set_plot_2 & ggtitle("BSGD Batch")) +  
+    (knn_plot_set_resid & knn_plot_set_resid_2 & ggtitle("PCA KNN-imputed")) + 
+    plot_layout(design = "12
+                          33
+                          44
+                          55")
+
+fig
+
+fig <- 
+  (sgd_cov_plot &sgd_cov_plot_2 & ggtitle("BSGD Batch")) +  
+    (knn_plot_resid & knn_plot_resid_2 & ggtitle("PCA KNN-imputed")) + 
+    plot_layout(design = "12
+                          33
+                          44
+                          55")
+
+fig
+
+fig <- (knn_plot + theme_bw()   & knn_plot_2 + theme_bw()  & ggtitle("knn-imputation")) +
+  (sgd_plot + theme_bw() & sgd_plot_2 + theme_bw() & ggtitle("SGD")) +  
+  (sgd_cov_plot + theme_bw()   & sgd_cov_plot_2 + theme_bw()  & ggtitle("SGD with batch correction")) +
+    plot_layout(design = "12
+                          33
+                          44")
+
+fig
+```
+
+```{r}
+library(umap)
+umap_sgd_lcbatch<- umap(sgd_cov_lcbatch)
+umap_sgd_set <- umap(sgd_cov_set)
+umap_sgd_resids <- umap(pca_knn_imputed_resids$x)
+
+```
+
+```{r}
+
+ggplot(data = as.data.frame(umap_sgd_lcbatch$layout),
+       aes(x = V1, y = V2, col = colData(sce)$SampleType)) +
+  geom_point()
+
+ggplot(data = as.data.frame(umap_sgd_resids$layout),
+       aes(x = V1, y = V2, col = colData(sce)$SampleType)) +
+  geom_point()
+
+ggplot(data = as.data.frame(umap_sgd_set$layout),
+       aes(x = V1, y = V2, col = colData(sce)$SampleType)) +
+  geom_point()
+
+
+ggplot(data = as.data.frame(umap_sgd_lcbatch$layout),
+       aes(x = V1, y = V2, col = colData(sce)$Set)) +
+  geom_point()+ theme(legend.position = "none")
+
+ggplot(data = as.data.frame(umap_sgd_resids$layout),
+       aes(x = V1, y = V2, col = colData(sce)$Set)) +
+  geom_point() + theme(legend.position = "none")
+
+ggplot(data = as.data.frame(umap_sgd_set$layout),
+       aes(x = V1, y = V2, col = colData(sce)$Set)) +
+  geom_point() + theme(legend.position = "none")
+
+ggplot(data = as.data.frame(umap_sgd_lcbatch$layout),
+       aes(x = V1, y = V2, col = colData(sce)$lcbatch)) +
+  geom_point()
+
+ggplot(data = as.data.frame(umap_sgd_resids$layout),
+       aes(x = V1, y = V2, col = colData(sce)$lcbatch)) +
+  geom_point()
+
+ggplot(data = as.data.frame(umap_sgd_set$layout),
+       aes(x = V1, y = V2, col = colData(sce)$lcbatch)) +
+  geom_point()
+```
+
+```{r}
+fig
+```
+
+
+```{r}
+saveRDS(object = sgd, file = here("Analyses","CPTEx","Output","sgd_sce.RDS"))
+saveRDS(time_diff, file = here("Analyses","CPTEx","Output","sgd_time.RDS"))
+```
+
+
+# Imputed missing data
+
+
+```{r}
+MISTOT10_MNAR0 <- readRDS(here("Data","leduc2022_pSCoPE_data","leduc_MISTOT10_MNAR0.RDS"))
+MISTOT10_MNAR25 <- readRDS(here("Data","leduc2022_pSCoPE_data","leduc_MISTOT10_MNAR25.RDS"))
+MISTOT10_MNAR50 <- readRDS(here("Data","leduc2022_pSCoPE_data","leduc_MISTOT10_MNAR50.RDS"))
+MISTOT10_MNAR75 <- readRDS(here("Data","leduc2022_pSCoPE_data","leduc_MISTOT10_MNAR75.RDS"))
+MISTOT10_MNAR100 <- readRDS(here("Data","leduc2022_pSCoPE_data","leduc_MISTOT10_MNAR100.RDS"))
+```
+
+
+
+```{r}
+assay(sce, "MISTOT10_MNAR0") <- MISTOT10_MNAR0$data
+sgd_10_0 <-  calculateSGD(sce, family = family, exprs_values = "MISTOT10_MNAR0", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 6, ntop = nrow(sce))
+
+saveRDS(object = sgd_10_0, file = here("Analyses","CPTEx","Output","sgd_MISTOT10_MNAR0.RDS"))
+```
+
+```{r}
+assay(sce, "MISTOT10_MNAR25") <- MISTOT10_MNAR25$data
+sgd_10_25 <-  calculateSGD(sce, family = family, exprs_values = "MISTOT10_MNAR25", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 6, ntop = nrow(sce))
+
+saveRDS(object = sgd_10_25, file = here("Analyses","CPTEx","Output","sgd_MISTOT10_MNAR25.RDS"))
+```
+
+```{r}
+assay(sce, "MISTOT10_MNAR50") <- MISTOT10_MNAR50$data
+sgd_10_50 <-  calculateSGD(sce[rowMeans(is.na(MISTOT10_MNAR50$data))<1,],
+                           family = family, exprs_values = "MISTOT10_MNAR50", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 6, ntop = nrow(sce))
+
+saveRDS(object = sgd_10_50, file = here("Analyses","CPTEx","Output","sgd_MISTOT10_MNAR50.RDS"))
+```
+
+```{r}
+assay(sce, "MISTOT10_MNAR75") <- MISTOT10_MNAR75$data
+sgd_10_75 <-  calculateSGD(sce[rowMeans(is.na(MISTOT10_MNAR75$data))<1,], 
+                           family = family, exprs_values = "MISTOT10_MNAR75", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 6, ntop = nrow(sce))
+
+saveRDS(object = sgd_10_75, file = here("Analyses","CPTEx","Output","sgd_MISTOT10_MNAR75.RDS"))
+```
+
+```{r}
+assay(sce, "MISTOT10_MNAR100") <- MISTOT10_MNAR100$data
+sgd_10_100 <-  calculateSGD(sce[rowMeans(is.na(MISTOT10_MNAR100$data))<1,],
+                            family = family, exprs_values = "MISTOT10_MNAR100", 
+                       control.alg = list(tol = 0.001, maxiter = 10000),
+                       ncomponents = 6, ntop = nrow(sce))
+
+saveRDS(object = sgd_10_100, file = here("Analyses","CPTEx","Output","sgd_MISTOT10_MNAR100.RDS"))
+```
+
+
+
+
+
+
+
+
+
+

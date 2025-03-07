@@ -1,0 +1,119 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+source(here("R-functions","NAguideR_functions.R"))
+```
+
+
+# All data
+
+```{r}
+
+set.seed(100)
+
+sce <- readRDS(file = here("Data/CPTAC_nolab1/CPTAC_sce.RDS"))
+data <- t(assay(sce, "logintensities"))
+
+methods <- c("zero", "minimum", "knnmethod", "qrilc")
+for(i in methods){
+  
+  begin_time <- Sys.time()
+  
+  df <- nafunctions(x = data, method = i)
+  
+  end_time <- Sys.time()
+  
+  time_difference <- end_time - begin_time
+  
+  saveRDS(object = df, file = paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_sce.RDS"))
+  saveRDS(object = time_difference, file = paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_time.RDS"))
+
+  }
+
+
+```
+
+
+
+```{r}
+set.seed(100)
+
+for (j in c(1:10)){
+  sce <- readRDS(file = paste0(here("Data/CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR25_", j, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+
+methods <- c("zero", "minimum", "knnmethod", "qrilc")
+
+  for(i in methods){
+    if(!file.exists(paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR25_", j, ".RDS"))){
+      
+      df <- nafunctions(x = data, method = i)
+      
+      saveRDS(object = df, file = paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR25_", j, ".RDS"))
+      
+    }
+  }
+}
+
+```
+
+
+
+```{r}
+set.seed(100)
+
+for (j in c(1:10)){
+  sce <- readRDS(file = paste0(here("Data/CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR50_", j, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+
+methods <- c("zero", "minimum", "knnmethod", "qrilc")
+
+  for(i in methods){
+    if(!file.exists(paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR50_", j, ".RDS"))){
+      
+      df <- nafunctions(x = data, method = i)
+      
+      saveRDS(object = df, file = paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR50_", j, ".RDS"))
+      
+    }
+  }
+}
+
+```
+
+
+
+```{r}
+set.seed(100)
+
+for (j in c(1:10)){
+  sce <- readRDS(file = paste0(here("Data/CPTAC_nolab1"), "/CPTAC_MISTOT10_MNAR75_", j, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+
+methods <- c("zero", "minimum", "knnmethod", "qrilc")
+
+  for(i in methods){
+    if(!file.exists(paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR75_", j, ".RDS"))){
+      
+      df <- nafunctions(x = data, method = i)
+      
+      saveRDS(object = df, file = paste0(here("Analyses/CPTAC_nolab1/Output/"),i, "_MISTOT10_MNAR75_", j, ".RDS"))
+      
+    }
+  }
+}
+
+```

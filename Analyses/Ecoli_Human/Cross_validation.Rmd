@@ -1,0 +1,52 @@
+---
+title: "sgdGMF Ecoli_human"
+output: html_document
+date: '2024-07-18'
+---
+# SGD GMF
+
+```{r}
+library(sgdGMF)
+library(dplyr)
+library(RSpectra)
+library(scater)
+library(BiocParallel)
+library(BiocSingular)
+library(DelayedArray)
+library(here)
+
+devtools::load_all(here("omicsGMF"))
+
+```
+
+# Load data
+```{r}
+sce <- readRDS(file = here("Data","Ecoli_Human","Ecoli_Human_sce.RDS"))
+
+```
+
+
+## Cross validation
+```{r}
+set.seed(100)
+
+family <- gaussian()
+cv <- calculateCVGMF(sce, family = family, 
+                      exprs_values = "logintensities", ncomponents = seq(1,5,1), 
+                      control.alg = list(tol = 0.001, maxiter = 10000), 
+                      control.cv = list(nfolds = 3),
+                      ntop = nrow(sce))
+
+saveRDS(object = cv, file = here("Analyses","Ecoli_Human","Output","crossval.RDS"))
+
+```
+
+
+```{r}
+print(cv)
+print(cv %>% group_by(ncomp) %>% summarise(mean_dev = mean(dev)))
+
+```
+
+
+

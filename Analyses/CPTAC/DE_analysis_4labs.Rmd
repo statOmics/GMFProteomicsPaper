@@ -1,0 +1,411 @@
+---
+title: "CPTAC all labs"
+output: html_document
+date: '2024-07-31'
+---
+
+```{r}
+library(here)
+library(msqrob2)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(here)
+devtools::load_all(here("omicsGMF"))
+
+```
+
+
+```{r}
+sce <- readRDS(here("Data/CPTAC_data/CPTAC_sce.RDS"))
+
+
+sgd <- readRDS(here("Analyses/CPTAC/Output/sgd_sce.RDS"))
+
+DAE <- read.csv(file = here("Analyses/CPTAC/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses/CPTAC/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+CF <- read.csv(file = here("Analyses/CPTAC/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+knn <- readRDS(file = here("Analyses/CPTAC/Output/knnmethod_sce.RDS"))
+
+
+
+```
+
+```{r}
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+colData(sce)$lab <- c(rep(rep(paste0("lab",c(4,2,3)),each=3),3),rep(rep(paste0("lab",c(1,2,3)),each=3),2)) %>% as.factor
+
+colData(sce)$samples <- as.factor(rownames(colData(sce)))
+
+
+```
+
+```{r}
+
+sce_sgd <- sce
+assay(sce_sgd) <- imputeGMF(assay(sce_sgd), sgd)
+
+rowData(sce_sgd) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+```
+
+```{r}
+sce_DAE <- sce
+assay(sce_DAE) <- t(DAE)
+rowData(sce_DAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_VAE <- sce
+assay(sce_VAE) <- t(VAE)
+rowData(sce_VAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+sce_CF <- sce
+assay(sce_CF) <- t(CF)
+rowData(sce_CF) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_knn <- sce
+assay(sce_knn) <- t(knn)
+rowData(sce_knn) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+```
+
+
+```{r}
+library(QFeatures)
+qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
+
+qf_sce <- QFeatures(list("peptide" = sce_sgd), colData = colData(sce))
+
+qf_DAE <- QFeatures(list("peptide" = sce_DAE), colData = colData(sce))
+qf_VAE <- QFeatures(list("peptide" = sce_VAE), colData = colData(sce))
+qf_CF <- QFeatures(list("peptide" = sce_CF), colData = colData(sce))
+qf_knn <- QFeatures(list("peptide" = sce_knn), colData = colData(sce))
+
+```
+
+
+
+```{r}
+
+pe_original <- msqrobAggregate(qf_original, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_sce <- msqrobAggregate(qf_sce, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+
+
+pe_DAE <-  msqrobAggregate(qf_DAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+
+pe_VAE <- msqrobAggregate(qf_VAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+
+pe_CF <-  msqrobAggregate(qf_CF, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+pe_knn <-  msqrobAggregate(qf_knn, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+```
+
+
+```{r}
+comparisonsRef <- paste0(paste0("ridgecondition", c("B","C","D","E")), " = 0")
+comparisonsRef
+
+comparisonsOther <- paste0(
+    apply(
+          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - ")
+          , " = 0")
+comparisonsOther
+
+comparisons <- c(comparisonsRef, comparisonsOther)
+comparisons
+```
+```{r}
+L <- makeContrast(comparisons, parameterNames = paste0("ridgecondition", c("B","C","D","E")))
+L
+
+```
+
+```{r}
+pe_original <- hypothesisTest(object = pe_original, i = "msqrobAggregate", contrast = L)
+
+pe_sgd <- hypothesisTest(object = pe_sce, i = "msqrobAggregate", contrast = L)
+
+pe_DAE <- hypothesisTest(object = pe_DAE, i = "msqrobAggregate", contrast = L)
+pe_VAE <- hypothesisTest(object = pe_VAE, i = "msqrobAggregate", contrast = L)
+pe_CF <- hypothesisTest(object = pe_CF, i = "msqrobAggregate", contrast = L)
+pe_knn <- hypothesisTest(object = pe_knn, i = "msqrobAggregate", contrast = L)
+
+```
+
+
+
+```{r}
+rowData(pe_original[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+rowData(pe_sgd[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+
+rowData(pe_DAE[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_VAE[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_CF[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+rowData(pe_knn[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+```
+
+
+```{r}
+myColors <- c("#BC3C29FF", 
+               "#E18727FF",
+              "#EFB118FF",
+              "#4269D0FF", "#A463F2FF","#20854EFF", "#9C6B4EFF", "#FFDC91FF", "#FF8AB7FF","black")
+names(myColors) <- c("SGD", 
+                     "SGD-batch", "SGD-batch-condition", 
+                     "DAE", "CF", "VAE",
+                      "KNN", "QRILC","zero",
+                     "no imputation")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+```
+
+```{r}
+tprFdp <- function(pval, tp, adjPval) {
+    ord <- order(pval)
+    return(data.frame(
+        pval = pval[ord],
+        adjPval = adjPval[ord],
+        tpr = cumsum(tp[ord]) / sum(tp),
+        fdp = cumsum(!tp[ord]) / 1:length(tp)
+    ))
+}
+
+```
+
+```{r}
+tprFdps<-list()
+tprFdpPlots <- list()
+
+comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
+          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - "))
+plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33))
+plot_titles[1:4] <- paste0(plot_titles[1:4], "A")
+for (i in comparisons_loop)
+{
+tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval,
+             rowData(pe_original[["msqrobAggregate"]])$ups,
+             rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval)
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$ups,
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$adjPval
+)
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$ups,
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$ups,
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$ups,
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "no imputation")
+)
+    hlp$method <- factor(hlp$method, levels = c("SGD","DAE","VAE","CF","KNN", "no imputation"))
+    select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    select[select == 0] <- 1
+
+tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no imputation")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + 
+    geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                aes(x = fdp, y = tpr, color = method), cex = 2) +
+    theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
+    xlab("FDP") + ylab("TPR") + theme(legend.position = "none", axis.title = element_text(size = 7), axis.text = element_text(size = 6), 
+                                      plot.title = element_text(size=10))
+
+
+
+}
+
+legend <- ggpubr::get_legend(hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no-imputation"))
+                             %>% 
+                               ggplot(aes(x = fdp, y = tpr, color = method)) +
+                               geom_path() + 
+                               geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                                          aes(x = fdp, y = tpr, color = method), cex = 2) +
+                               theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
+                               xlab("FDP") + ylab("TPR") + 
+                               theme(legend.position = "bottom", 
+                                     legend.title = element_text(size = 7),
+                                     legend.text = element_text(size = 6),
+                                     legend.justification = "left", 
+                                     legend.box.margin =  margin(l = 1, r = -2, unit = "cm")))
+
+
+
+tprFdpPlots
+```
+
+
+```{r}
+
+full_plot_tprfdp <- gridExtra::grid.arrange(grobs = append(tprFdpPlots,
+                                    list(ggpubr::as_ggplot(legend))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+
+plot(full_plot_tprfdp)
+
+
+saveRDS(object = append(tprFdpPlots,
+                                    list(ggpubr::as_ggplot(legend))),
+        file = here("Analyses/CPTAC/Output/tprfdpplots_4labs.RDS"))
+ggsave(filename = here("Analyses/CPTAC/Output/full_plot_tprfdp_4labs.pdf"), 
+       plot = full_plot_tprfdp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+ggsave(filename = here("Figures/full_plot_tprfdp_4labs.pdf"), 
+       plot = full_plot_tprfdp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+```
+
+```{r}
+
+
+y_intercepts <- data.frame(yintercept = c(log2(c(
+    c(0.74, 2.22, 6.67, 20) / c(0.25), 
+    c(2.22, 6.67, 20) / c(0.74), 
+    c(6.67, 20) / c(2.22),
+    20/6.67)), rep(0, 10)),
+    "ups" = rep(c("Human spike-in", "Yeast"), each = 10))
+
+
+
+
+logFC_plots <- list()
+for (i in comparisons_loop)
+{
+
+    
+    logFC <- data.frame(
+        SGD = rowData(pe_sgd[["msqrobAggregate"]])[[i]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[i]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[i]][, 1],
+    ups = rowData(pe_sgd[["msqrobAggregate"]])$ups)
+    
+    logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+    logFC$ups <- factor(logFC$ups, labels = c("Yeast", "Human spike-in"))
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                "DAE", "VAE", "CF", "KNN", "original"),
+                       labels = c("SGD", 
+                                                "DAE", "VAE", "CF", "KNN", "no imputation"))
+
+logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30",
+               linetype = "solid", alpha =0.5) + 
+    ggtitle(plot_titles[comparisons_loop == i]) + 
+    theme_bw() + 
+    theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank(),
+          axis.title.y = element_text(size = 7), axis.text = element_text(size = 6), plot.title = element_text(size=10),
+          strip.text.x = element_text(size = 6))  +    
+    scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+   colScale
+
+}
+legend_lfc <- ggpubr::get_legend(logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30") + 
+    ggtitle(plot_titles[comparisons_loop == i]) + 
+    theme_bw() + 
+    theme(legend.position = "bottom", legend.title = element_text(size = 7), 
+                                             legend.text = element_text(size = 6), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1.5, r = -2, unit = "cm")) +    
+scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+  colScale)
+
+
+
+
+
+```
+
+
+```{r}
+full_plot_lfc <- gridExtra::grid.arrange(grobs = append(logFC_plots,
+                                    list(ggpubr::as_ggplot(legend_lfc))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+
+saveRDS(object = append(logFC_plots,
+                                    list(ggpubr::as_ggplot(legend_lfc))),
+        file = here("Analyses/CPTAC/Output/logfcplots_4labs.RDS"))
+ggsave(filename = here("Analyses/CPTAC/Output/full_plot_lfc_4labs.pdf"), 
+       plot = full_plot_lfc, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Figures/full_plot_lfc_4labs.pdf"), plot = full_plot_lfc,
+       device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```

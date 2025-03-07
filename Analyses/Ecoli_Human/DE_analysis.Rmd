@@ -1,0 +1,820 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-31'
+---
+
+```{r}
+library(here)
+library(msqrob2)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+devtools::load_all(here("omicsGMF"))
+
+```
+
+
+```{r}
+sce <- readRDS(here("Data/Ecoli_Human/Ecoli_Human_sce.RDS"))
+
+cond <- which(strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "a") # find where condition is stored
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>% unlist %>%  as.factor
+
+
+sgd <- readRDS(here("Analyses/Ecoli_Human/Output/sgd_sce.RDS"))
+
+DAE <- read.csv(file = here("Analyses/Ecoli_Human/Output/DAE_sce_default.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses/Ecoli_Human/Output/VAE_sce_default.csv"),
+                  header = T, row.names = 1)
+CF <- read.csv(file = here("Analyses/Ecoli_Human/Output/CF_sce_default.csv"),
+                  header = T, row.names = 1)
+knn <- readRDS(file = here("Analyses/Ecoli_Human/Output/knnmethod_sce.RDS"))
+
+
+
+```
+```{r}
+
+sce_sgd <- sce
+assay(sce_sgd) <- imputeGMF(assay(sce_sgd), sgd)
+rowData(sce_sgd) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_DAE <- sce
+assay(sce_DAE) <- t(DAE)
+rowData(sce_DAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_VAE <- sce
+assay(sce_VAE) <- t(VAE)
+rowData(sce_VAE) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+sce_CF <- sce
+assay(sce_CF) <- t(CF)
+rowData(sce_CF) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_knn <- sce
+assay(sce_knn) <- t(knn)
+rowData(sce_knn) <- rowData(sce)[,c("Proteins","Sequence")]
+
+
+```
+
+```{r}
+library(QFeatures)
+qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
+
+qf_sgd <- QFeatures(list("peptide" = sce_sgd), colData = colData(sce))
+
+qf_DAE <- QFeatures(list("peptide" = sce_DAE), colData = colData(sce))
+qf_VAE <- QFeatures(list("peptide" = sce_VAE), colData = colData(sce))
+qf_CF <- QFeatures(list("peptide" = sce_CF), colData = colData(sce))
+qf_knn <- QFeatures(list("peptide" = sce_knn), colData = colData(sce))
+
+```
+
+
+
+
+```{r}
+
+pe_original <- msqrobAggregate(qf_original, i = "peptide", fcol = "Proteins",
+     formula = ~condition + (1|Sequence),
+     ridge = TRUE)
+
+pe_sgd <-  msqrobAggregate(qf_sgd, i = "peptide", fcol = "Proteins",
+     formula = ~condition  + (1|Sequence),
+     ridge = TRUE)
+
+pe_DAE <-  msqrobAggregate(qf_DAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + (1|Sequence),
+     ridge = TRUE)
+
+pe_VAE <- msqrobAggregate(qf_VAE, i = "peptide", fcol = "Proteins",
+     formula = ~condition + (1|Sequence),
+     ridge = TRUE)
+
+pe_CF <-  msqrobAggregate(qf_CF, i = "peptide", fcol = "Proteins",
+     formula = ~condition + (1|Sequence),
+     ridge = TRUE)
+
+pe_knn <-  msqrobAggregate(qf_knn, i = "peptide", fcol = "Proteins",
+     formula = ~condition + (1|Sequence),
+     ridge = TRUE)
+
+```
+
+
+
+
+```{r}
+comparisonsRef <- paste0(paste0("ridgecondition", c(2:5)), " = 0")
+comparisonsRef
+
+comparisonsOther <- paste0(
+    apply(
+          combn(paste0("ridgecondition", c(2:5)), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - ")
+          , " = 0")
+comparisonsOther
+
+comparisons <- c(comparisonsRef, comparisonsOther)
+```
+
+```{r}
+L <- makeContrast(comparisons, parameterNames = paste0("ridgecondition", c(2:5)))
+L
+
+```
+
+
+
+```{r}
+pe_original <- hypothesisTest(object = pe_original, i = "msqrobAggregate", contrast = L)
+
+pe_sgd <- hypothesisTest(object = pe_sgd, i = "msqrobAggregate", contrast = L)
+
+pe_DAE <- hypothesisTest(object = pe_DAE, i = "msqrobAggregate", contrast = L)
+pe_VAE <- hypothesisTest(object = pe_VAE, i = "msqrobAggregate", contrast = L)
+pe_CF <- hypothesisTest(object = pe_CF, i = "msqrobAggregate", contrast = L)
+pe_knn <- hypothesisTest(object = pe_knn, i = "msqrobAggregate", contrast = L)
+
+```
+
+
+
+```{r}
+myurl <- "https://www.dropbox.com/s/swhu9nqwktythtb/ecoli_up000000625_7_06_2018.fasta?dl=0"
+download.file(myurl, "ecoli.fasta", method = "curl", extra = "-L")
+myurl <- "https://www.dropbox.com/s/n61n28wrcpwsb4a/human_up000005640_sp_7_06_2018.fasta?dl=0"
+download.file(myurl, "human.fasta", method = "curl", extra = "-L")
+```
+
+```{r}
+id <- list(ecoli = 'ecoli.fasta',
+          human = 'human.fasta') %>%
+  purrr::map(~{read_lines(.x) %>%
+          {.[str_detect(.,'^>')]} %>%
+          str_extract(.,'(?<=\\|).*(?=\\|)')})
+```
+
+```{r}
+accessions <- rownames(pe_original[["msqrobAggregate"]]) %>%
+    data_frame(protein=.)
+
+accessions <- accessions %>%
+    transmute(protein=as.character(protein),proteins = strsplit(protein, ';')) %>%
+    unnest %>%
+    mutate(human = proteins %in% id$human, ecoli =  proteins %in% id$ecoli) %>%
+    group_by(protein) %>%
+    summarise(human = any(human), ecoli = any(ecoli)) %>%
+    right_join(accessions)
+
+rowData(pe_original[["msqrobAggregate"]])$accession <- accessions
+rowData(pe_sgd[["msqrobAggregate"]])$accession <- accessions
+rowData(pe_DAE[["msqrobAggregate"]])$accession <- accessions
+rowData(pe_VAE[["msqrobAggregate"]])$accession <- accessions
+rowData(pe_CF[["msqrobAggregate"]])$accession <- accessions
+rowData(pe_knn[["msqrobAggregate"]])$accession <- accessions
+
+```
+
+Check that all accessions are either human or ecoli:
+
+```{r}
+nrow(accessions)
+sum(accessions$human)
+sum(accessions$ecoli)
+sum(accessions$human) + sum(accessions$ecoli)
+```
+
+Function to calculate TPR and FDP
+```{r}
+tprFdp <- function(pval, tp, adjPval){
+ord <- order(pval)
+return(data.frame(
+  pval = pval[ord],
+  adjPval = adjPval[ord],
+  tpr = cumsum(tp[ord])/sum(tp),
+  fdp = cumsum(!tp[ord])/1:length(tp)))
+}
+```
+
+```{r}
+myColors <- c("#BC3C29FF", 
+               "#E18727FF",
+              "#EFB118FF",
+              "#4269D0FF", "#A463F2FF","#20854EFF", "#9C6B4EFF", "#FFDC91FF", "#FF8AB7FF","black")
+names(myColors) <- c("SGD", 
+                     "SGD-batch", "SGD-batch-condition", 
+                     "DAE", "CF", "VAE",
+                      "KNN", "QRILC","zero",
+                     "no imputation")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+```
+
+### Other contrasts
+
+```{r}
+concentrations <- seq(2,6) * 1.5
+names(concentrations) <- c(1:5)
+
+contrastNames <- colnames(L)
+FCs <- apply(
+           combn(c(1:5), 2),
+           2,
+           function(x) concentrations[x[2]]/concentrations[x[1]]
+          )
+names(FCs) <- contrastNames
+```
+
+
+```{r}
+tprFdps<-list()
+tprFdpPlots <- list()
+
+plot_titles <- paste0(substr(contrastNames,15, stop = 15), " versus ", substr(contrastNames, 33, 33))
+plot_titles[1:4] <- paste0(plot_titles[1:4], "1")
+
+
+for (i in contrastNames)
+{
+    tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval,
+             rowData(pe_original[["msqrobAggregate"]])$accession$ecoli,
+             rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval)
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd[["msqrobAggregate"]])$accession$ecoli,
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_DAE[["msqrobAggregate"]])$accession$ecoli,
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$adjPval
+)
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_VAE[["msqrobAggregate"]])$accession$ecoli,
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_CF[["msqrobAggregate"]])$accession$ecoli,
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_knn[["msqrobAggregate"]])$accession$ecoli,
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "no imputation")
+)
+    hlp$method <- factor(hlp$method, levels = c("SGD","DAE","VAE","CF","KNN", "no imputation"))
+    select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    select[select == 0] <- 1
+    
+tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no imputation")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + 
+    geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                aes(x = fdp, y = tpr, color = method), cex = 2) +
+    theme_bw() + colScale + ggtitle(plot_titles[contrastNames == i]) + 
+    xlab("FDP") + ylab("TPR") + theme(legend.position = "none", axis.title = element_text(size = 7), axis.text = element_text(size = 6), 
+                                      plot.title = element_text(size=10))
+
+
+
+}
+legend <- ggpubr::get_legend(hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no imputation"))
+                             %>% 
+                               ggplot(aes(x = fdp, y = tpr, color = method)) +
+                               geom_path() + 
+                               geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                                          aes(x = fdp, y = tpr, color = method), cex = 2) +
+                               theme_bw() + colScale + ggtitle(plot_titles[contrastNames == i]) + 
+                               xlab("FDP") + ylab("TPR") + 
+                               theme(legend.position = "bottom", 
+                                     legend.title = element_text(size = 7),
+                                     legend.text = element_text(size = 6),
+                                     legend.justification = "left", 
+                                     legend.box.margin =  margin(l = 1, r = -2, unit = "cm")))
+
+tprFdpPlots
+```
+
+
+```{r}
+full_plot_tprfdp <- gridExtra::grid.arrange(grobs = append(tprFdpPlots,
+                                    list(ggpubr::as_ggplot(legend))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+
+
+saveRDS(object = append(tprFdpPlots,
+                                    list(ggpubr::as_ggplot(legend))),
+        file = here("Analyses/Ecoli_Human/Output/tprfdpplots_ecoli.RDS"))
+
+
+
+ggsave(filename = here("Analyses/Ecoli_Human/Output/full_plot_tprfdp_ecoli.pdf"), plot = full_plot_tprfdp,
+        device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+ggsave(filename = here("Figures/full_plot_tprfdp_ecoli.pdf"), plot = full_plot_tprfdp,
+        device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+```
+
+
+```{r}
+
+y_intercepts <- data.frame(yintercept = c(log2(FCs), rep(0, 10)),
+    "ups" = rep(c("Ecoli spike-in", "Human"), each = 10))
+logFC_plots <- list()
+for (i in contrastNames)
+{
+
+    
+    logFC <- data.frame(
+        SGD = rowData(pe_sgd[["msqrobAggregate"]])[[i]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[i]][, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[i]][, 1],
+    ups = rowData(pe_sgd[["msqrobAggregate"]])$accession$ecoli)
+    
+    logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+    logFC$ups <- factor(logFC$ups, labels = c("Human", "Ecoli spike-in"))
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                "DAE", "VAE", "CF", "KNN", "original"),
+                       labels = c("SGD", 
+                                                "DAE", "VAE", "CF", "KNN", "no imputation"))
+
+logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[contrastNames == i,], aes(yintercept = yintercept), color = "grey30",
+               linetype = "solid", alpha =0.5) + 
+    ggtitle(plot_titles[contrastNames == i]) + 
+    theme_bw() + 
+    theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank(),
+          axis.title.y = element_text(size = 7), axis.text = element_text(size = 6), plot.title = element_text(size=10),
+          strip.text.x = element_text(size = 6))  +    
+    scale_fill_discrete(name = "Protein", labels = c("Human", "Ecoli spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+   colScale
+
+
+}
+legend_lfc <- ggpubr::get_legend(logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[contrastNames == i,], aes(yintercept = yintercept), color = "grey30",
+               linetype = "solid", alpha =0.5) + 
+    ggtitle(plot_titles[contrastNames == i]) + 
+    theme_bw()  + 
+    theme(legend.position = "bottom", legend.title = element_text(size = 7), 
+                                             legend.text = element_text(size = 6), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1.5, r = -2, unit = "cm"))  +    
+    scale_fill_discrete(name = "Protein", labels = c("Human", "Ecoli spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x))+
+  facet_wrap(~ups)  +
+   colScale)
+
+
+logFC_plots
+```
+
+```{r}
+full_plot_lfc <- gridExtra::grid.arrange(grobs = append(logFC_plots,
+                                    list(ggpubr::as_ggplot(legend_lfc))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+full_plot_lfc
+saveRDS(object = append(logFC_plots,
+                                    list(ggpubr::as_ggplot(legend_lfc))),
+        file = here("Analyses/Ecoli_Human/Output/logfcplots_ecoli.RDS"))
+ggsave(filename = here("Analyses/Ecoli_Human/Output/full_plot_lfc_ecoli.pdf"), plot = full_plot_lfc,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Figures/full_plot_lfc_ecoli.pdf"), plot = full_plot_lfc,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+# Distributions
+
+```{r}
+original_assay <- sce %>%
+  assay %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = is.na(intensity))
+
+original_assay
+
+
+reconstructed_sgd <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
+                        sgd %*% t(attr(sgd,'rotation'))))[rownames(sce),]
+
+reconstructed_assay <- reconstructed_sgd %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+sgd_imputed_assay <- original_assay
+sgd_imputed_assay[is.na(sgd_imputed_assay$intensity),] <- reconstructed_assay[is.na(sgd_imputed_assay$intensity),]
+ 
+
+
+DAE_assay <- t(DAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+VAE_assay <- t(VAE) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+CF_assay <- t(CF) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+knn_assay <- t(knn) %>%
+  as.data.frame %>%
+  rownames_to_column(var = "peptide") %>%
+  gather(sample, intensity, -peptide) %>% 
+  mutate(condition = rep(colData(sce)[,"condition"], each = nrow(sce))) %>%
+  mutate(missing = original_assay$missing)
+
+
+```
+
+```{r}
+data_all <- rbind(original_assay, sgd_imputed_assay, DAE_assay, VAE_assay, CF_assay, knn_assay)
+data_all$origin <- factor(rep(c("original", "Imputed_SGD","DAE","VAE", 
+                                "CF", "KNN"), 
+                        each = nrow(original_assay)), 
+                        levels = c("original", "Imputed_SGD","DAE","VAE", 
+                                "CF", "KNN"),
+                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed"))
+condition <- substr(data_all$sample, 11, stop = 11)
+data_all$condition <- as.factor(condition)
+
+```
+
+
+```{r}
+data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% accessions$protein[accessions$ecoli == T])]),] %>% filter(missing == FALSE & origin %in% c("Observed")) %>% group_by(condition) %>% summarise(mean = mean(intensity))
+
+data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% accessions$protein[accessions$ecoli == F])]),] %>% filter(missing == FALSE & origin %in% c("Observed")) %>% group_by(condition) %>% summarise(mean = mean(intensity))
+
+```
+
+```{r}
+data_all$origin <- factor(data_all$origin,
+                          levels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed"),
+                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed"))
+
+library(RColorBrewer)
+myColors <- brewer.pal(10,"Set1")
+myColors <- c("black", "red", 
+              "blue", "cyan","green", "orchid2")
+names(myColors) <- c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")
+      
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+
+
+
+```
+
+
+```{r}
+myColors <- c("black", "#BC3C29FF", 
+              "#4269D0FF", "#A463F2FF","#20854EFF", "#9C6B4EFF")
+names(myColors) <- c("Observed", "SGD-imputed", 
+                     "DAE-imputed", "CF-imputed", "VAE-imputed",
+                      "KNN-imputed")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+```
+
+```{r}
+p1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == T])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & 
+                                                                    origin %in% c("Observed"))))) %>% 
+    group_by(origin, condition) %>%
+    summarise(median = median(intensity)),
+    aes(x = condition, y = median, col = origin)) +
+    geom_point() + 
+    geom_line(aes(x = as.numeric(condition), y = median, col = origin)) + 
+    theme_bw() + 
+    ggtitle("Intensity of Ecoli peptides") +
+    colScale + 
+  ylab("Median intensity") + 
+  xlab("Condition") + theme(legend.position = "none")
+
+
+p2 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == F])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & origin %in% c("Observed"))))) %>% 
+    group_by(origin, condition) %>%
+    summarise(median = median(intensity)),
+    aes(x = condition, y = median, col = origin)) + 
+    geom_point() + 
+    geom_line(aes(x = as.numeric(condition), y = median, col = origin)) + 
+        theme_bw() + 
+        ggtitle("Intensity of Human peptides") +
+
+    colScale + 
+  ylab("Median intensity") + 
+  xlab("Condition")+ theme(legend.position = "none")
+
+legend_distributions <- ggpubr::get_legend(ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == F])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & origin %in% c("Observed"))))) %>% 
+    group_by(origin, condition) %>%
+    summarise(median = median(intensity)),
+    aes(x = condition, y = median, col = origin)) + 
+    geom_point() + 
+    geom_line(aes(x = as.numeric(condition), y = median, col = origin)) + 
+        theme_bw() + 
+        ggtitle("Intensity of Human peptides") +
+
+    colScale + 
+  ylab("Median intensity") + 
+  xlab("Condition"))
+
+merged_distributionplot <- gridExtra::grid.arrange(grobs = append(append(list(p1),list(p2)),
+                                    list(ggpubr::as_ggplot(legend_distributions))),
+                        layout_matrix = rbind(c(1:3)), widths = c(0.4, 0.4, 0.2))
+ggsave(filename = here("Analyses/Ecoli_Human/Output/distribution_plot_ecoli_peptides.pdf"), plot = p1,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Analyses/Ecoli_Human/Output/distribution_plot_human_peptides.pdf"), plot = p2,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Analyses/Ecoli_Human/Output/merged_distribution_plot_ecoli.pdf"), plot = merged_distributionplot,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+ggsave(filename = here("Figures/distribution_plot_ecoli_peptides.pdf"), plot = p1,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Figures/distribution_plot_human_peptides.pdf"), plot = p2,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(filename = here("Figures/merged_distribution_plot_ecoli.pdf"), plot = merged_distributionplot,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+# Common
+
+
+
+```{r}
+tprFdpPlots_common <- list()
+
+plot_titles <- paste0(substr(contrastNames,15, stop = 15), " versus ", substr(contrastNames, 33, 33))
+plot_titles[1:4] <- paste0(plot_titles[1:4], "1")
+
+filter <- !is.na(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval)
+
+for (i in contrastNames)
+{
+    tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval[filter],
+             rowData(pe_original[["msqrobAggregate"]])$accession$ecoli[filter],
+             rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval[filter])
+
+tprFdpSGD <- tprFdp(
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$pval[filter],
+    rowData(pe_sgd[["msqrobAggregate"]])$accession$ecoli[filter],
+    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$adjPval[filter]
+)
+
+
+
+tprFdpDAE <- tprFdp(
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$pval[filter],
+    rowData(pe_DAE[["msqrobAggregate"]])$accession$ecoli[filter],
+    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$adjPval[filter]
+)
+tprFdpVAE <- tprFdp(
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$pval[filter],
+    rowData(pe_VAE[["msqrobAggregate"]])$accession$ecoli[filter],
+    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$adjPval[filter]
+)
+
+tprFdpCF <- tprFdp(
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$pval[filter],
+    rowData(pe_CF[["msqrobAggregate"]])$accession$ecoli[filter],
+    rowData(pe_CF[["msqrobAggregate"]])[[i]]$adjPval[filter]
+)
+
+tprFdpknn <- tprFdp(
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$pval[filter],
+    rowData(pe_knn[["msqrobAggregate"]])$accession$ecoli[filter],
+    rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval[filter]
+)
+
+hlp <- rbind(
+    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpDAE, method = "DAE"),
+    cbind(tprFdpVAE, method = "VAE"),
+    cbind(tprFdpCF, method = "CF"),
+    cbind(tprFdpknn, method = "KNN"),
+    cbind(tprFdporiginal, method = "no-imputation")
+)
+    hlp$method <- factor(hlp$method, levels = c("SGD","DAE","VAE","CF","KNN", "no-imputation"))
+    select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.01, na.rm = T))
+    
+tprFdpPlots_common[[i]] <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no-imputation")) %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + 
+    geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                aes(x = fdp, y = tpr, color = method), cex = 2) +
+    theme_bw() + colScale + ggtitle(plot_titles[contrastNames == i]) + 
+    xlab("FDP") + ylab("TPR") + theme(legend.position = "none")
+
+
+
+}
+tprFdpPlots_common
+```
+
+```{r}
+
+logFC_plots_common <- list()
+for (i in contrastNames)
+{
+
+    
+    logFC <- data.frame(
+        SGD = rowData(pe_sgd[["msqrobAggregate"]])[[i]][filter, 1],
+    # sgd_batch = rowData(pe_sgd_batch[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    # sgd_batch_condition = rowData(pe_sgd_batch_condition[["msqrobAggregate"]])[[colnames(LDC)]][, 1],
+    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][filter, 1],
+    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][filter, 1],
+    CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][filter, 1],
+    KNN = rowData(pe_knn[["msqrobAggregate"]])[[i]][filter, 1],
+    original = rowData(pe_original[["msqrobAggregate"]])[[i]][filter, 1],
+    ups = rowData(pe_sgd[["msqrobAggregate"]])$accession$ecoli[filter])
+    
+    logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+                                            #"sgd_batch","sgd_batch_condition", 
+                                            "DAE", "VAE", "CF", "KNN", "original"))
+logFC$ups <- as.factor(logFC$ups)
+logFC$method <- factor(logFC$method, levels = c("SGD", 
+                                                #"sgd_batch","sgd_batch_condition", 
+                                                "DAE", "VAE", "CF", "KNN", "original"),
+                       labels = c("SGD", 
+                                                #"sgd_batch","sgd_batch_condition", 
+                                                "DAE", "VAE", "CF", "KNN", "no-imputation"))
+
+logFC_plots_common[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, fill = ups)) +
+    geom_boxplot() +
+    geom_hline(yintercept = log2(FCs[[i]]), color = "red") + 
+    ggtitle(plot_titles[contrastNames == i]) + 
+    theme_bw() + 
+    theme(legend.position = "none", axis.text.x = element_text(size = 7.5), axis.title.x = element_blank())  +    
+    scale_fill_discrete(name = "Protein", labels = c("Human", "Ecoli spike-in"))
+
+
+}
+
+```
+
+```{r}
+
+full_plot_tprfdp_common <- gridExtra::grid.arrange(grobs = append(tprFdpPlots_common,
+                                    list(ggpubr::as_ggplot(legend))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+
+plot(full_plot_tprfdp_common)
+ggsave(filename = here("Analyses/Ecoli_Human/Output/full_plot_tprfdp_ecoli_common.jpeg"), plot = full_plot_tprfdp_common,
+       width = 3600, units = "px", height = 3000)
+
+
+
+full_plot_lfc_common <- gridExtra::grid.arrange(grobs = append(logFC_plots_common,
+                                    list(ggpubr::as_ggplot(legend_lfc))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+
+ggsave(filename = here("Analyses/Ecoli_Human/Output/full_plot_lfc_ecoli_common.jpeg"), plot = full_plot_lfc_common, width = 4500, 
+       unit = "px", height = 3000)
+
+```
+
+
+#old
+
+
+```{r}
+
+p1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == T])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & 
+                                                                    origin %in% c("Observed"))))),
+    aes(x = condition, y = intensity, col = origin)) +
+    geom_violin() + 
+    theme_bw() + 
+    colScale
+
+
+p2 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == F])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(
+                                       missing == FALSE & origin %in% c("Observed"))))),
+    aes(x = condition, y = intensity, col = origin)) + 
+    geom_violin() + 
+        theme_bw() + 
+    colScale
+
+
+
+p1
+p2
+```
+
+```{r}
+p1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == T])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & 
+                                                                    origin %in% c("Observed"))))),
+    aes(x = condition, y = intensity, col = condition)) +
+    facet_wrap(~origin) + 
+    geom_violin() + 
+        geom_line(aes(x = as.numeric(condition)), y = c(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == T])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & 
+                                                                    origin %in% c("Observed"))))) %>% 
+    group_by(origin, condition) %>%
+    summarise(mean = mean(intensity)))) + 
+    theme_bw()
+
+p1
+
+
+p2 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == F])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(
+                                       missing == FALSE & origin %in% c("Observed"))))),
+    aes(x = condition, y = intensity, col = origin)) + 
+    geom_violin() + 
+    geom_line(aes(x = as.numeric(condition), y = c(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][(rowData(sce[rownames(sce), ])$Proteins %in% 
+            accessions$protein[accessions$ecoli == T])]),]%>% 
+         filter(((missing == TRUE & origin %in% c("SGD-imputed","DAE-imputed","VAE-imputed",
+                                   "CF-imputed","KNN-imputed")|(missing == FALSE & 
+                                                                    origin %in% c("Observed"))))) %>% 
+    group_by(origin, condition) %>%
+    summarise(mean = mean(intensity)))))
+        theme_bw() + 
+    colScale
+
+
+
+p1
+p2
+```
+
+
+```{r}
+saveRDS(object = p1, file = "plotp1.RDS")
+saveRDS(object = p2, file = "plotp2.RDS")
+
+```
+
+

@@ -31,7 +31,7 @@ myColors <- c("#BC3C29FF",  "#E18727FF", "#E18727FF",
               "#9498A0FF","#9C6B4EFF",
               "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
               "black")
-names(myColors) <- c("SGD", "SGD Batch", "SGD Treatment", 
+names(myColors) <- c("GMF", "GMF Batch", "GMF Treatment", 
                      "DAE", "VAE", "CF",
                      "DAE-CV","VAE-CV", "CF-CV",
                      "NIPALS",
@@ -99,7 +99,7 @@ QRILC_PC <- prcomp(QRILC, rank = 2)
 zero_PC <- prcomp(zero, rank = 2)
 minimum_PC <- prcomp(minimum, rank = 2)
 
-titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+titles <- c("GMF", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
 MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
 
 ```
@@ -201,7 +201,7 @@ QRILC_PC <- prcomp(QRILC, rank = 2)
 zero_PC <- prcomp(zero, rank = 2)
 minimum_PC <- prcomp(minimum, rank = 2)
 
-titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+titles <- c("GMF", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
 MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
 
 ```
@@ -281,16 +281,16 @@ minimum <- readRDS(file = here("Analyses/Petrosius/Output/minimum_sce.RDS"))
 ### PCAs
 
 ```{r}
-DAE_PC <- prcomp(DAE, rank = 8)
-VAE_PC <- prcomp(VAE, rank = 8)
-CF_PC <- prcomp(CF, rank = 8)
+DAE_PC <- prcomp(DAE, rank = 5)
+VAE_PC <- prcomp(VAE, rank = )
+CF_PC <- prcomp(CF, rank = 5)
 
-KNN_PC <- prcomp(KNN, rank = 8)
-QRILC_PC <- prcomp(QRILC, rank = 8)
-zero_PC <- prcomp(zero, rank = 8)
-minimum_PC <- prcomp(minimum, rank = 8)
+KNN_PC <- prcomp(KNN, rank = 5)
+QRILC_PC <- prcomp(QRILC, rank = 5)
+zero_PC <- prcomp(zero, rank = 5)
+minimum_PC <- prcomp(minimum, rank = 5)
 
-titles <- c("SGD", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+titles <- c("GMF", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
 MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
 
 ```
@@ -344,7 +344,7 @@ Petrosius_pca_plot_batch_corrected <-
        aes(x = PC1,y = PC2, color = as.factor(colData(sce_Petrosius)$SampleType))) +
   geom_point(alpha = 0.5) + scale_colour_manual(values = c("purple3","orange")) +
     xlab("PC1") + 
-    ggtitle("SGD Treatment") + 
+    ggtitle("GMF Treatment") + 
   theme_bw() + 
     labs(col = "Treatment:   ") + 
     theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
@@ -461,12 +461,12 @@ df_cor <- data.frame("correlation" = c(cor_sgd, cor_DAE, cor_VAE, cor_CF, cor_ni
                                        cor_qrilc_spearman, cor_zero_spearman, cor_minimum_spearman,
                                        cor_sgd_2_spearman, cor_DAE_2_spearman, cor_VAE_2_spearman, cor_CF_2_spearman, cor_nipals_2_spearman, 
                                        cor_knn_2_spearman, cor_qrilc_2_spearman, cor_zero_2_spearman, cor_minimum_2_spearman),
-                     "method" = rep(c("SGD","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"), times = 4),
+                     "method" = rep(c("GMF","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"), times = 4),
                      "PC" = rep(c("PC1","PC2"), each = 9),
                      "cormethod" = c(rep(c("Pearson", "Spearman"), each = 18)))
-df_cor$method <- factor(df_cor$method, levels = c("SGD","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"))
+df_cor$method <- factor(df_cor$method, levels = c("GMF","DAE","VAE", "CF", "NIPALS", "KNN", "QRILC","zero","minimum"))
 
-plt1Panel2 <- ggplot(df_cor %>% filter(method %in% c("SGD", "DAE","VAE", "CF", "NIPALS", "KNN")), 
+plt1Panel2 <- ggplot(df_cor %>% filter(method %in% c("GMF", "DAE","VAE", "CF", "NIPALS", "KNN")), 
                      aes(x = PC, y = abs(correlation), fill = method)) +
   geom_bar(stat = "identity", position = position_dodge()) + facet_wrap(~cormethod, ncol = 2) + 
   ylab("Correlation with \nmissingness") + theme_bw() + theme(axis.title.x = element_blank()) + colScale_fill
@@ -549,7 +549,7 @@ QRILC_PC <- prcomp(QRILC, rank = 40)
 zero_PC <- prcomp(zero, rank = 40)
 minimum_PC <- prcomp(minimum, rank = 40)
 
-titles <- c("SGD Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+titles <- c("GMF Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
 MF <- list(sgd_batch, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
 
 
@@ -651,7 +651,7 @@ zero_correction_PCs <- prcomp(t(resids_zero_correction), rank = 10)
 minimum_correction_PCs <- prcomp(t(resids_minimum_correction), rank = 10)
 
 
-  titles <- c("SGD Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+  titles <- c("GMF Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
   MF <- list(sgd_batch, DAE_correction_PCs$x, VAE_correction_PCs$x, KNN_correction_PCs$x, 
              nipals_correction_PCs$x, KNN_correction_PCs$x, QRILC_correction_PCs$x,
              zero_correction_PCs$x, minimum_correction_PCs$x)
@@ -798,7 +798,7 @@ df_summarised_Petrosius$method <- factor(df_summarised_Petrosius$method, levels 
                                               "CF-NN", "CF-NN-default",
                                               "NIPALS", "knnmethod", 
                                               "BPCA","QRILC","zero","minimum"), 
-                                     labels = c("SGD","SGD Treatment", 
+                                     labels = c("GMF","GMF Treatment", 
                                               "DAE-CV", "DAE", 
                                               "VAE-CV", "VAE",
                                               "CF-CV", "CF",
@@ -810,13 +810,13 @@ df_summarised_Leduc$missing_type <- factor(df_summarised_Leduc$missing_type,
                                                levels = c("all", "MAR","MNAR"), 
                                                labels = c("all","MCAR","MNAR"))
 
-df_summarised_Leduc$method <- factor(df_summarised_Leduc$method, levels = c("SGD","SGD Mean shift","SGD Batch", "SGD Batch Mean shift",
+df_summarised_Leduc$method <- factor(df_summarised_Leduc$method, levels = c("SGD","SGD Batch",
                                               "DAE-NN", "DAE-NN-default", 
                                               "VAE-NN", "VAE-NN-default",
                                               "CF-NN", "CF-NN-default",
                                               "NIPALS", "knnmethod", 
                                               "BPCA","QRILC","zero","minimum"), 
-                                     labels = c("SGD","SGD Mean shift","SGD Batch", "SGD Batch Mean shift",
+                                     labels = c("GMF","GMF Batch", 
                                               "DAE-CV", "DAE", 
                                               "VAE-CV", "VAE",
                                               "CF-CV", "CF",
@@ -826,7 +826,7 @@ df_summarised_Leduc$method <- factor(df_summarised_Leduc$method, levels = c("SGD
 
 
 ```{r}
-Petrosius_imputation_plot <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD","SGD Treatment", 
+Petrosius_imputation_plot <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("GMF","GMF Treatment", 
                                               "DAE", "VAE", "CF", 
                                               "NIPALS", "KNN")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -837,7 +837,7 @@ Petrosius_imputation_plot <- ggplot(df_summarised_Petrosius %>% filter(method %i
   theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type") + ylab("MAE")
 
 
-Leduc_imputation_plot <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD","SGD Batch", 
+Leduc_imputation_plot <- ggplot(df_summarised_Leduc %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                               "NIPALS" ,"KNN")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -855,7 +855,7 @@ ggsave(plot = Leduc_imputation_plot, filename = here("Figures/imputation_Leduc.p
 ```
 
 ```{r}
-Petrosius_imputation_plot_CV <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD","SGD Treatment", 
+Petrosius_imputation_plot_CV <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("GMF","GMF Treatment", 
                                               "DAE", "VAE", "CF", 
                                               "DAE-CV", "VAE-CV", "CF-CV")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -866,7 +866,7 @@ Petrosius_imputation_plot_CV <- ggplot(df_summarised_Petrosius %>% filter(method
   theme(axis.text.x = element_blank()) + colScale + labs(shape = "Missing type") + ylab("MAE")
 
 
-Leduc_imputation_plot_CV <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD","SGD Batch", 
+Leduc_imputation_plot_CV <- ggplot(df_summarised_Leduc %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                               "DAE-CV", "VAE-CV", "CF-CV")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -889,7 +889,7 @@ ggsave(plot = Petrosius_and_Leduc_imputation_CV, filename = here("Figures/imputa
 
 
 ```{r}
-Petrosius_imputation_plot_all <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("SGD", "SGD Treatment",  
+Petrosius_imputation_plot_all <- ggplot(df_summarised_Petrosius %>% filter(method %in% c("GMF", "GMF Treatment",  
                       "DAE", "VAE", "CF", 
                      "NIPALS",
                      "KNN", "QRILC","zero","minimum")), 
@@ -901,7 +901,7 @@ Petrosius_imputation_plot_all <- ggplot(df_summarised_Petrosius %>% filter(metho
   theme(axis.text.x = element_blank()) + colScale+ labs(shape = "Missing type") + ylab("MAE")
 
 
-Leduc_imputation_plot_all <- ggplot(df_summarised_Leduc %>% filter(method %in% c("SGD", "SGD Batch",  
+Leduc_imputation_plot_all <- ggplot(df_summarised_Leduc %>% filter(method %in% c("GMF", "GMF Batch",  
                       "DAE", "VAE", "CF", 
                      "NIPALS",
                      "KNN", "QRILC","zero","minimum")), 
@@ -955,7 +955,7 @@ df_summarised_CPTAC_all$method <- factor(df_summarised_CPTAC_all$method, levels 
                                               "CF-NN", "CF-default-NN",
                                               "NIPALS", "KNN", 
                                               "QRILC","zero","minimum"), 
-                                     labels = c("SGD","SGD Batch",
+                                     labels = c("GMF","GMF Batch",
                                               "DAE-CV", "DAE", 
                                               "VAE-CV", "VAE",
                                               "CF-CV", "CF",
@@ -972,7 +972,7 @@ df_summarised_CPTAC_nolab1$method <- factor(df_summarised_CPTAC_nolab1$method, l
                                               "CF-NN", "CF-NN-default",
                                               "NIPALS", "knnmethod", 
                                               "QRILC","zero","minimum"), 
-                                     labels = c("SGD","SGD Batch", 
+                                     labels = c("GMF","GMF Batch", 
                                               "DAE-CV", "DAE", 
                                               "VAE-CV", "VAE",
                                               "CF-CV", "CF",
@@ -989,7 +989,7 @@ df_summarised_CPTAC_lab1$method <- factor(df_summarised_CPTAC_lab1$method, level
                                               "CF-NN", "CF-default-NN",
                                               "NIPALS", "KNN", 
                                               "QRILC","zero","minimum"), 
-                                     labels = c("SGD","SGD Batch",
+                                     labels = c("GMF","GMF Batch",
                                               "DAE-CV", "DAE", 
                                               "VAE-CV", "VAE",
                                               "CF-CV", "CF",
@@ -1000,7 +1000,7 @@ df_summarised_CPTAC_lab1$method <- factor(df_summarised_CPTAC_lab1$method, level
 
 
 ```{r}
-CPTAC_all_labs_imputation_plot <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_all_labs_imputation_plot <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                                "KNN")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -1012,7 +1012,7 @@ CPTAC_all_labs_imputation_plot <- ggplot(df_summarised_CPTAC_all %>% filter(meth
   guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
 
 
-CPTAC_all_labs_imputation_plot_all <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_all_labs_imputation_plot_all <- ggplot(df_summarised_CPTAC_all %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                                "KNN", "QRILC","zero","minimum")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -1024,7 +1024,7 @@ CPTAC_all_labs_imputation_plot_all <- ggplot(df_summarised_CPTAC_all %>% filter(
   guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
 
 
-CPTAC_nolab1_imputation_plot <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_nolab1_imputation_plot <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                               "KNN")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -1040,9 +1040,8 @@ theme(plot.title = element_text(size = 12,
   guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
 
 
-CPTAC_nolab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_nolab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_nolab1 %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
-                                              #"DAE-NN-default", "VAE-NN-default", "CF-NN-default",
                                               "KNN", "QRILC","zero","minimum")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
   geom_point(size = 2.5) + 
@@ -1057,7 +1056,7 @@ theme(plot.title = element_text(size = 12,
   guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
 
 
-CPTAC_only_lab1_imputation_plot <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_only_lab1_imputation_plot <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                               "KNN")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -1068,7 +1067,7 @@ CPTAC_only_lab1_imputation_plot <- ggplot(df_summarised_CPTAC_lab1 %>% filter(me
   theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE") +
   guides(size = guide_legend(order = 2), colour = guide_legend(order = 1))
 
-CPTAC_only_lab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("SGD","SGD Batch", 
+CPTAC_only_lab1_imputation_plot_all <- ggplot(df_summarised_CPTAC_lab1 %>% filter(method %in% c("GMF","GMF Batch", 
                                               "DAE", "VAE", "CF", 
                                               "KNN", "QRILC","zero","minimum")), 
        aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
@@ -1180,10 +1179,10 @@ knn_assay <- t(knn) %>%
 
 ```{r}
 data_all <- rbind(original_assay, sgd_imputed_assay, DAE_assay, VAE_assay, CF_assay, knn_assay)
-data_all$origin <- factor(rep(c("original", "Imputed_SGD","DAE","VAE", "CF", "KNN"), 
+data_all$origin <- factor(rep(c("original", "Imputed_GMF","DAE","VAE", "CF", "KNN"), 
                         each = nrow(original_assay)), 
-                        levels = c("original", "Imputed_SGD","DAE","VAE", "CF","KNN"),
-                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
+                        levels = c("original", "Imputed_GMF","DAE","VAE", "CF","KNN"),
+                        labels = c("Observed", "GMF-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
 lab <- substr(data_all$sample, 14, stop = 14)
 lab[lab %in% c("1","2","3")] <- "lab_1"
 lab[lab %in% c("4","5","6")] <- "lab_2"
@@ -1195,7 +1194,7 @@ data_all$lab <- lab
 
 
 
-Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed"))) & !(origin %in% c("SGD_reconstructed"))), 
+Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
   aes(x = condition, y = intensity, col = condition)) + 
   geom_violin() + 
   facet_wrap(~origin, ncol = 3) +
@@ -1209,12 +1208,11 @@ Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rown
                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
 
-Imputation_distribution_nonUPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed"))) & !(origin %in% c("SGD_reconstructed"))), 
+Imputation_distribution_nonUPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
   aes(x = condition, y = intensity, col = condition)) + 
   geom_violin() + 
   facet_wrap(~origin, ncol = 3) +
   labs(col = "Condition") + 
-  #ylim(c(-10,10)) + 
   theme_bw() + 
   ylab("Intensity") + 
   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
@@ -1244,7 +1242,7 @@ Imputation_Figure <-
         Leduc_imputation_plot + theme(legend.position = "none"), 
         nrow = 2, legend = "none", labels= list("A","B")),
       get_legend(Petrosius_imputation_plot), ncol = 2, align= "hv", widths = c(0.8, 0.2)), 
-    Imputation_distribution_UPS_nolab1_final, nrow = 2,
+    Imputation_distribution_UPS_nolab1, nrow = 2,
     align= "v", heights = c(0.6, 0.4), labels = list("", "C"))
 
 
@@ -1344,10 +1342,10 @@ knn_assay <- t(knn) %>%
 
 ```{r}
 data_all <- rbind(original_assay, sgd_imputed_assay, DAE_assay, VAE_assay, CF_assay, knn_assay)
-data_all$origin <- factor(rep(c("original", "Imputed_SGD","DAE","VAE", "CF", "KNN"), 
+data_all$origin <- factor(rep(c("original", "Imputed_GMF","DAE","VAE", "CF", "KNN"), 
                         each = nrow(original_assay)), 
-                        levels = c("original", "Imputed_SGD","DAE","VAE", "CF","KNN"),
-                        labels = c("Observed", "SGD-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
+                        levels = c("original", "Imputed_GMF","DAE","VAE", "CF","KNN"),
+                        labels = c("Observed", "GMF-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
 lab <- substr(data_all$sample, 14, stop = 14)
 lab[lab %in% c("1","2","3")] <- "lab_1"
 lab[lab %in% c("4","5","6")] <- "lab_2"
@@ -1400,11 +1398,12 @@ ggsave(plot = plot_distribution_missingness_CPTAC, filename = here("Figures/dist
 
 
 ```{r}
-imputation_plot_per_lab_UPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("SGD-imputed", "CF-imputed")) | (origin =="Observed"))), 
+imputation_plot_per_lab_UPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("GMF-imputed", "CF-imputed")) | (origin =="Observed"))), 
   aes(x = condition, y = intensity, col = condition)) + 
   geom_violin() + 
   facet_wrap(~lab*origin, ncol = 3) +
   theme_bw() + 
+  ylab("Intensity") + 
   #ylim(c(-10,10)) + 
   ggtitle("Imputed intensities of spiked-in \nhuman peptides") + labs(col = "Condition")+ 
   theme(legend.position = "bottom", legend.title = element_text(size = 10), legend.text = element_text(size = 10)) + 
@@ -1412,11 +1411,12 @@ imputation_plot_per_lab_UPS <- ggplot(data_all[data_all$peptide %in% rownames(sc
                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
 
-imputation_plot_per_lab_nonUPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("SGD-imputed", "CF-imputed")) | (origin =="Observed"))), 
+imputation_plot_per_lab_nonUPS <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter((missing == TRUE & (origin %in% c("GMF-imputed", "CF-imputed")) | (origin =="Observed"))), 
   aes(x = condition, y = intensity, col = condition)) + 
   geom_violin() + 
   facet_wrap(~lab*origin, ncol = 3) +
   theme_bw() + 
+  ylab("Intensity") + 
   #ylim(c(-10,10)) + 
   ggtitle("Imputed intensities of background \nyeast peptides")+ 
   labs(col = "Condition")+ 
@@ -1504,25 +1504,59 @@ df_cv_all$method <- factor(df_cv_all$method, levels = c("No known covariates",
 ```
 
 ```{r}
-cv_plot <- ggplot(data = df_cv_all,
-	       aes(x = ncomp, y = deviance, col = method)) +
-	  geom_point() + 
-	  geom_line() + 
-	  theme_bw() + 
-	  ylab("Mean out-of-sample deviances") + 
-	  xlab("Number of latent factors") + 
-	  scale_colour_manual(values = c("No known covariates" = "#BC3C29FF",
-	                                                 "Known batch or treatment effects" = 	"#4269D0FF",
-	                                                 "Known batch and spike-in effects" = "#20854EFF")) + 
-  facet_wrap(~data, scale = "free") + 
-  guides(colour = guide_legend(ncol = 3)) +
-  theme(legend.position = "bottom", legend.title = element_blank(), 
-        legend.key.height = unit(0.3, "cm"),legend.direction = "horizontal",
-        legend.box = "horizontal") 
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+
+plot_petrosius <- ggplot(subset(df_cv_all, data == "Petrosius"), 
+                         aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("No known covariates" = "#BC3C29FF",
+                                 "Known batch or treatment effects" = "#4269D0FF",
+                                 "Known batch and spike-in effects" = "#20854EFF")) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Petrosius")
+
+plot_leduc <- ggplot(subset(df_cv_all, data == "Leduc"), 
+                     aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("No known covariates" = "#BC3C29FF",
+                                 "Known batch or treatment effects" = "#4269D0FF",
+                                 "Known batch and spike-in effects" = "#20854EFF")) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Leduc")
+
+plot_cptac <- ggplot(subset(df_cv_all, data == "CPTAC"), 
+                     aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("No known covariates" = "#BC3C29FF",
+                                 "Known batch or treatment effects" = "#4269D0FF",
+                                 "Known batch and spike-in effects" = "#20854EFF")) +
+  theme(legend.position = "bottom", legend.title = element_blank(),
+        legend.key.height = unit(0.3, "cm"), legend.direction = "horizontal",
+        legend.box = "horizontal", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("CPTAC")
+
+get_legend <- function(myggplot) {
+  g <- ggplotGrob(myggplot)
+  legend <- g$grobs[[which(sapply(g$grobs, function(x) x$name) == "guide-box")]]
+  return(legend)
+}
+
+plot_cptac_nolegend <- plot_cptac + theme(legend.position = "none")
 
 
+plots_arranged <- ggarrange(plot_petrosius, plot_leduc, plot_cptac_nolegend, 
+                            labels = c("A", "B", "C"),  # Labels above y-axis
+                            ncol = 3)
 
+final_plot <- ggarrange(plots_arranged, get_legend(plot_cptac + theme(legend.position = "bottom")), ncol = 1, heights = c(3, 0.3)) 
 
-ggsave(plot = cv_plot, filename = here("Figures/cv_plot.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+ggsave(plot = final_plot, filename = here("Figures/cv_plot.pdf"), 
+       device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
 ```
 

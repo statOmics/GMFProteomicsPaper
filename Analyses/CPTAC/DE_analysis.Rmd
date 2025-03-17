@@ -15,19 +15,6 @@ library(here)
 devtools::load_all(here("omicsGMF"))
 ```
 
-```{r}
-reconstruct_sgd <- function(sgd, rownames = NULL){
-  
-  reconstructed <- (t(attr(sgd,'X') %*% t(attr(sgd , 'Beta')) + attr(sgd, 'Gamma') %*% t(attr(sgd, 'Z')) + 
-                        sgd %*% t(attr(sgd,'rotation'))))
-  if(!is.null(rownames)){
-    reconstructed <- reconstructed[rownames, ]
-  }
-    return(t(reconstructed))
-
-}
-
-```
 
 ```{r}
 sce <- readRDS(here("Data/CPTAC_data/CPTAC_sce.RDS"))
@@ -201,8 +188,8 @@ myColors <- c("#BC3C29FF",
                "#E18727FF",
               "#EFB118FF",
               "#4269D0FF", "#A463F2FF","#20854EFF", "#9C6B4EFF", "#FFDC91FF", "#FF8AB7FF","black")
-names(myColors) <- c("SGD", 
-                     "SGD-batch", "SGD-batch-condition", 
+names(myColors) <- c("GMF", 
+                     "GMF-batch", "GMF-batch-condition", 
                      "DAE", "CF", "VAE",
                       "KNN", "QRILC","zero",
                      "no imputation")
@@ -272,19 +259,19 @@ tprFdpknn <- tprFdp(
 )
 
 hlp <- rbind(
-    cbind(tprFdpSGD, method = "SGD"),
+    cbind(tprFdpSGD, method = "GMF"),
     cbind(tprFdpDAE, method = "DAE"),
     cbind(tprFdpVAE, method = "VAE"),
     cbind(tprFdpCF, method = "CF"),
     cbind(tprFdpknn, method = "KNN"),
     cbind(tprFdporiginal, method = "no imputation")
 )
-    hlp$method <- factor(hlp$method, levels = c("SGD","DAE","VAE","CF","KNN", "no imputation"))
+    hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
     select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
     select[select == 0] <- 1
 
 
-tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no imputation")) %>% 
+tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no imputation")) %>% 
     ggplot(aes(x = fdp, y = tpr, color = method)) +
     geom_path() + 
     geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
@@ -297,7 +284,7 @@ tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","
 
 }
 
-legend <- ggpubr::get_legend(hlp %>% filter(method %in% c("SGD", "DAE","VAE","CF","KNN","no-imputation"))
+legend <- ggpubr::get_legend(hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no-imputation"))
                              %>% 
                                ggplot(aes(x = fdp, y = tpr, color = method)) +
                                geom_path() + 
@@ -349,7 +336,7 @@ for (i in comparisons_loop)
 
     
     logFC <- data.frame(
-        SGD = rowData(pe_sgd[["msqrobAggregate"]])[[i]][, 1],
+        GMF = rowData(pe_sgd[["msqrobAggregate"]])[[i]][, 1],
     DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][, 1],
     VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][, 1],
     CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][, 1],
@@ -357,12 +344,12 @@ for (i in comparisons_loop)
     original = rowData(pe_original[["msqrobAggregate"]])[[i]][, 1],
     ups = rowData(pe_sgd[["msqrobAggregate"]])$ups)
     
-    logFC <- logFC %>% gather(method, log2FC, c("SGD", 
+    logFC <- logFC %>% gather(method, log2FC, c("GMF", 
                                             "DAE", "VAE", "CF", "KNN", "original"))
     logFC$ups <- factor(logFC$ups, labels = c("Yeast", "Human spike-in"))
-logFC$method <- factor(logFC$method, levels = c("SGD", 
+logFC$method <- factor(logFC$method, levels = c("GMF", 
                                                 "DAE", "VAE", "CF", "KNN", "original"),
-                       labels = c("SGD", 
+                       labels = c("GMF", 
                                                 "DAE", "VAE", "CF", "KNN", "no imputation"))
 
 logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
@@ -377,8 +364,7 @@ logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) 
     scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
     scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
   facet_wrap(~ups)  +
-   colScale#+
-    #scale_x_discrete(labels = "SGD", "DAE", "VAE", "CF", "KNN", "no \n imputation")
+   colScale
 
 
 

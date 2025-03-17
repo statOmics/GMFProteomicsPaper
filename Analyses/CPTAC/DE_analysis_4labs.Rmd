@@ -11,8 +11,14 @@ library(dplyr)
 library(ggplot2)
 library(tidyverse)
 library(here)
+library(BiocParallel)
+
 devtools::load_all(here("omicsGMF"))
 
+```
+
+```{r}
+register(BPPARAM = MulticoreParam(workers = 1))
 ```
 
 

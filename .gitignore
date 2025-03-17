@@ -2,7 +2,7 @@
 *.html
 *.RDS
 *.csv
-*.py
+*.ipynb
 *.txt.*
 *.pdf
 *.png

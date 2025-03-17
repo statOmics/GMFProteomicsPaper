@@ -11,3 +11,4 @@
 *.ipynb_checkpoints
 *.json
 *.jpeg
+*.fasta

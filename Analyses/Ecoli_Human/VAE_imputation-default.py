@@ -55,7 +55,7 @@ print(end - start)
 # In[ ]:
 
 
-df_imputed.to_csv("Output/VAE_sce.csv")
+df_imputed.to_csv("Output/VAE_default_sce.csv")
 
 
 # In[ ]:
@@ -86,7 +86,7 @@ for x in range(1,11):
     
     print(end - start)
     
-    df_imputed.to_csv("Output/VAE_MISTOT10_MNAR25_" + str(x) + ".csv")
+    df_imputed.to_csv("Output/VAE_default_MISTOT10_MNAR25_" + str(x) + ".csv")
 
 
 # In[ ]:
@@ -117,7 +117,7 @@ for x in range(1,11):
     
     print(end - start)
     
-    df_imputed.to_csv("Output/VAE_MISTOT10_MNAR50_" + str(x) + ".csv")
+    df_imputed.to_csv("Output/VAE_default_MISTOT10_MNAR50_" + str(x) + ".csv")
 
 
 # In[ ]:
@@ -148,5 +148,5 @@ for x in range(1,11):
     
     print(end - start)
     
-    df_imputed.to_csv("Output/VAE_MISTOT10_MNAR75_" + str(x) + ".csv")
+    df_imputed.to_csv("Output/VAE_default_MISTOT10_MNAR75_" + str(x) + ".csv")
 

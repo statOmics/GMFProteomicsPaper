@@ -31,9 +31,9 @@ sgd <- readRDS(here("Analyses/Ecoli_Human/Output/sgd_sce.RDS"))
 
 DAE <- read.csv(file = here("Analyses/Ecoli_Human/Output/DAE_sce_default.csv"),
                   header = T, row.names = 1)
-VAE <- read.csv(file = here("Analyses/Ecoli_Human/Output/VAE_sce_default.csv"),
+VAE <- read.csv(file = here("Analyses/Ecoli_Human/Output/VAE_default_sce.csv"),
                   header = T, row.names = 1)
-CF <- read.csv(file = here("Analyses/Ecoli_Human/Output/CF_sce_default.csv"),
+CF <- read.csv(file = here("Analyses/Ecoli_Human/Output/CF_default_sce.csv"),
                   header = T, row.names = 1)
 knn <- readRDS(file = here("Analyses/Ecoli_Human/Output/knnmethod_sce.RDS"))
 
@@ -370,7 +370,7 @@ for (i in contrastNames)
     logFC$ups <- factor(logFC$ups, labels = c("Human", "Ecoli spike-in"))
 logFC$method <- factor(logFC$method, levels = c("GMF", 
                                                 "DAE", "VAE", "CF", "KNN", "original"),
-                       labels = c("SGD", 
+                       labels = c("GMF", 
                                                 "DAE", "VAE", "CF", "KNN", "no imputation"))
 
 logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +

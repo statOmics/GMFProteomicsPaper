@@ -106,8 +106,8 @@ for(i in c("25","50","75")){
 
   
   # all methods that are included in sapply
-  methods <- list(sgd_reconstructed, ,
-                  sgd_batch_reconstructed, , 
+  methods <- list(sgd_reconstructed,
+                  sgd_batch_reconstructed, 
                   DAE, VAE, CF, 
                   DAE_default, VAE_default, CF_default, 
                   nipals_reconstructed, knnmethod, qrilc ,zero, minimum)

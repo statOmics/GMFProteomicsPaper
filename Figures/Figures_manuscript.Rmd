@@ -282,7 +282,7 @@ minimum <- readRDS(file = here("Analyses/Petrosius/Output/minimum_sce.RDS"))
 
 ```{r}
 DAE_PC <- prcomp(DAE, rank = 5)
-VAE_PC <- prcomp(VAE, rank = )
+VAE_PC <- prcomp(VAE, rank = 5)
 CF_PC <- prcomp(CF, rank = 5)
 
 KNN_PC <- prcomp(KNN, rank = 5)
@@ -291,7 +291,8 @@ zero_PC <- prcomp(zero, rank = 5)
 minimum_PC <- prcomp(minimum, rank = 5)
 
 titles <- c("GMF", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
-MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+MF <- list(sgd, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, 
+           QRILC_PC$x, zero_PC$x, minimum_PC$x)
 
 ```
 
@@ -409,6 +410,40 @@ ggsave(plot = Petrosius_pca_plot_missing_2, filename = here("Figures/visualisati
 
 ```
 
+<!-- ```{r} -->
+<!-- library(viridis) -->
+<!-- Petrosius_pca_plot_missing <- lapply(1:9, function(i){ -->
+<!--   ggplot(data = MF[[i]],  -->
+<!--        aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce))))) + -->
+<!--   geom_point(alpha = 0.5)+  scale_colour_viridis() + xlab("PC1") + ggtitle(titles[i])  + -->
+<!--   theme_bw() + labs(col = "Proportion missing") -->
+<!--   }) -->
+
+
+
+<!-- Petrosius_pca_plot_missing_1 <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]],  -->
+<!--                                     Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]], -->
+<!--                         ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom") -->
+
+<!-- Petrosius_pca_plot_missing_1_no_legend <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]],  -->
+<!--                                     Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]], -->
+<!--                         ncol = 2, nrow = 3, align = "h", legend = "none") -->
+
+<!-- Petrosius_pca_plot_missing_2 <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]],  -->
+<!--                                     Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]], -->
+<!--                                     Petrosius_pca_plot_missing[[7]], Petrosius_pca_plot_missing[[8]], Petrosius_pca_plot_missing[[9]], -->
+<!--                         ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom") -->
+
+<!-- legend_pca_plot_missing <- as_ggplot(get_legend(Petrosius_pca_plot_missing[[1]])) -->
+
+
+
+<!-- ggsave(plot = Petrosius_pca_plot_missing_1, filename = here("Figures/visualisations_Petrosius_missing.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215) -->
+<!-- ggsave(plot = Petrosius_pca_plot_missing_2, filename = here("Figures/visualisations_Petrosius_missing_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215) -->
+
+
+
+<!-- ``` -->
 ### Correlation plots
 ```{r}
 
@@ -1557,10 +1592,6 @@ final_plot <- ggarrange(plots_arranged, get_legend(plot_cptac + theme(legend.pos
 
 ggsave(plot = final_plot, filename = here("Figures/cv_plot.pdf"), 
        device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
-
-```
-
-```{r}
 
 ```
 

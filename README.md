@@ -1,8 +1,9 @@
-# SGDImputationPaper
+# GMFProteomicsPaper
 
 Repository for the paper using sgdGMF for dimensionality reduction, 
 batch effect removal and imputation of missing values for mass-spectrometry 
-based proteomics data.
+based proteomics data. The bioRxiv preprint is available at: 
+
 
 ## Setup and preprocessing of data
 

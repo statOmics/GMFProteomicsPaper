@@ -1,8 +1,0 @@
-{
-    "n_factors": 6,
-    "y_range": [
-        -6,
-        10
-    ],
-    "batch_size": 4096
-}

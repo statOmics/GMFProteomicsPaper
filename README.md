@@ -7,7 +7,7 @@ based proteomics data. The bioRxiv preprint is available at:
 
 ## Setup and preprocessing of data
 
-First, download the data from ZENODO LINK, and put this file in the SGDImputationPaper 
+First, download the data from ZENODO LINK, and put this file in the GMFProteomicsPaper 
 folder. Then, one can download all the data and continue to preprocess these
 based on the scripts under ‘Data/‘. Using the Makefile, this can also be achieved by
 using ‘make CPTAC_preparation‘, ‘make CPTAC_nolab1_preparation‘, ‘make Petrosius_preparation‘,

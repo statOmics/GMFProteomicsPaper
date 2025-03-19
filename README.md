@@ -42,5 +42,5 @@ using `make figures`.
 ## Run the project:
 
 The code can be run by executing the different scripts directly or through the Makefile. 
-Using make, you can execute the full project using make all.
+Using make, you can execute the full project using `make all`.
 

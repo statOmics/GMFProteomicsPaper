@@ -10,7 +10,7 @@ Authors@R: c(
 Version: 0.99.0
 Date: 2025-01-14
 Title: Dimensionality reduction of (single-cell) omics data in R using sgdGMF
-Description: scSGDGMF is a Bioconductor wrapper for the sgdGMF \code{\link{sgdGMF}} package, which is a highly performant 
+Description: omicsGMF is a Bioconductor wrapper for the sgdGMF \code{\link{sgdGMF}} package, which is a highly performant 
     and fast matrix factorization tool that can be used for dimensionality reduction, visualization and imputation of omics
     data. It considers data from the general exponential family as input, and therefore suits the use of both RNA-seq
     (Poisson or Negative Binomial data) and proteomics data (Gaussian data). It does not require prior transformation of
@@ -51,8 +51,8 @@ Suggests:
     grDevices,
     QFeatures
 License: Artistic-2.0
-URL: https://github.com/statOmics/scSGDGMF
-BugReports: https://github.com/statOmics/scSGDGMF/issues
+URL: https://github.com/statOmics/omicsGMF
+BugReports: https://github.com/statOmics/omicsGMF/issues
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Encoding: UTF-8

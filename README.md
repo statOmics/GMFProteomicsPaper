@@ -1,6 +1,6 @@
 # GMFProteomicsPaper
 
-Repository for the paper using sgdGMF for dimensionality reduction, 
+Repository for the paper using omicsGMF for dimensionality reduction, 
 batch effect removal and imputation of missing values for mass-spectrometry 
 based proteomics data. The bioRxiv preprint is available at: 
 

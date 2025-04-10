@@ -2,7 +2,10 @@
 
 Repository for the paper using omicsGMF for dimensionality reduction, 
 batch effect removal and imputation of missing values for mass-spectrometry 
-based proteomics data. The bioRxiv preprint is available at: 
+based proteomics data. The bioRxiv preprint is available at 
+https://www.biorxiv.org/content/10.1101/2025.03.24.644996v1, and our package is
+available at https://github.com/statOmics/omicsGMF. 
+
 
 
 ## Setup and preprocessing of data

@@ -12,6 +12,7 @@ library(ggplot2)
 library(tidyverse)
 library(here)
 library(BiocParallel)
+library(QFeatures)
 
 devtools::load_all(here("omicsGMF"))
 ```
@@ -19,10 +20,15 @@ devtools::load_all(here("omicsGMF"))
 register(BPPARAM = MulticoreParam(workers = 1))
 ```
 
+# Loading the data
+
 
 ```{r}
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd. This data has no imputed values.
+
 sce <- readRDS(here("Data/CPTAC_data/CPTAC_sce.RDS"))
 
+# Read the imputed intensity matrices for the different imputation methods.
 
 sgd <- readRDS(here("Analyses/CPTAC/Output/sgd_sce.RDS"))
 
@@ -39,13 +45,19 @@ knn <- readRDS(file = here("Analyses/CPTAC/Output/knnmethod_sce.RDS"))
 
 ```
 
+# Preprocessing to get the right format
+
 ```{r}
+# Define the condition and labs in colData to include as a known covariate in the msqrob2 analysis.
+
 cond <- which(
   strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
 
 colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
   unlist %>%  
   as.factor
+
+# In this script 2 fixed effects are included, one for each lab. 
 
 colData(sce)$lab <- rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor
 
@@ -55,6 +67,7 @@ colData(sce)$samples <- as.factor(rownames(colData(sce)))
 ```
 
 ```{r}
+# Impute according to the GMF model.
 
 sce_sgd <- sce
 assay(sce_sgd) <- imputeGMF(assay(sce_sgd), sgd)
@@ -66,6 +79,8 @@ rowData(sce_sgd) <- rowData(sce)[,c("Proteins","Sequence")]
 ```
 
 ```{r}
+# Define the different summarized experiments.
+
 sce_DAE <- sce
 assay(sce_DAE) <- t(DAE)
 rowData(sce_DAE) <- rowData(sce)[,c("Proteins","Sequence")]
@@ -88,10 +103,17 @@ rowData(sce_knn) <- rowData(sce)[,c("Proteins","Sequence")]
 
 
 ```{r}
-library(QFeatures)
+# Define the different QFeatures objects for the msqrob2 analysis.
+
+# without imputed values
+
 qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
 
+# imputed values according to the GMF model
+
 qf_sce <- QFeatures(list("peptide" = sce_sgd), colData = colData(sce))
+
+# imputed values according to the other models
 
 qf_DAE <- QFeatures(list("peptide" = sce_DAE), colData = colData(sce))
 qf_VAE <- QFeatures(list("peptide" = sce_VAE), colData = colData(sce))
@@ -101,12 +123,21 @@ qf_knn <- QFeatures(list("peptide" = sce_knn), colData = colData(sce))
 ```
 
 
+# msqrob2 analysis
 
 ```{r}
+# msqrob2 analysis to search for different abundant proteins. The model uses
+# peptide intensities, but performs inference on the protein level. Here, we include
+# a lab effect to control for this variation, as well as a random effect for both sample
+# as protein to allow for inference on the protein level. Note that in this script
+# 2 fixed effects for labs were used.
 
+# Analysis without imputed values
 pe_original <- msqrobAggregate(qf_original, i = "peptide", fcol = "Proteins",
      formula = ~condition + lab + (1|samples) + (1|Sequence),
      ridge = TRUE)
+
+# Analyses for the different imputation strategies
 
 
 pe_sce <- msqrobAggregate(qf_sce, i = "peptide", fcol = "Proteins",
@@ -140,6 +171,8 @@ pe_knn <-  msqrobAggregate(qf_knn, i = "peptide", fcol = "Proteins",
 
 
 ```{r}
+# Define the different pairwise conditions that are compared. 
+
 comparisonsRef <- paste0(paste0("ridgecondition", c("B","C","D","E")), " = 0")
 comparisonsRef
 
@@ -154,14 +187,15 @@ comparisonsOther
 
 comparisons <- c(comparisonsRef, comparisonsOther)
 comparisons
-```
-```{r}
+
 L <- makeContrast(comparisons, parameterNames = paste0("ridgecondition", c("B","C","D","E")))
 L
 
 ```
 
 ```{r}
+# Inference on protein level between the pairwise different conditions. 
+
 pe_original <- hypothesisTest(object = pe_original, i = "msqrobAggregate", contrast = L)
 
 pe_sgd <- hypothesisTest(object = pe_sce, i = "msqrobAggregate", contrast = L)
@@ -176,6 +210,8 @@ pe_knn <- hypothesisTest(object = pe_knn, i = "msqrobAggregate", contrast = L)
 
 
 ```{r}
+# Define the known differentially abundant proteins.
+
 rowData(pe_original[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
 
 rowData(pe_sgd[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
@@ -188,6 +224,8 @@ rowData(pe_knn[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqro
 ```
 
 ```{r}
+# Define the colours for the visualizations.
+
 myColors <- c("#BC3C29FF", 
                "#E18727FF",
               "#EFB118FF",
@@ -201,7 +239,13 @@ colScale <- scale_colour_manual(name = "Method",values = myColors)
 
 ```
 
+# Figures TPR-FDP
+
 ```{r}
+
+# Compute the TPR-FDP curves for each method based on the p-values that are returned
+# by the msqrob2 analysis. The true positives are given by the UPS proteins. 
+
 tprFdp <- function(pval, tp, adjPval) {
     ord <- order(pval)
     return(data.frame(
@@ -215,6 +259,8 @@ tprFdp <- function(pval, tp, adjPval) {
 ```
 
 ```{r}
+# Loop over the different pairwise comparisons to make the TPR-FDP plots.
+
 tprFdps<-list()
 tprFdpPlots <- list()
 
@@ -225,8 +271,18 @@ comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
           collapse = " - "))
 plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33))
 plot_titles[1:4] <- paste0(plot_titles[1:4], "A")
+
+results_fdp1 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp5 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp10 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+
 for (i in comparisons_loop)
 {
+    # define the TPR-FDP curve for each method and for comparison i
+
 tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval,
              rowData(pe_original[["msqrobAggregate"]])$ups,
              rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval)
@@ -262,6 +318,9 @@ tprFdpknn <- tprFdp(
     rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval
 )
 
+  # merge all results
+
+
 hlp <- rbind(
     cbind(tprFdpSGD, method = "GMF"),
     cbind(tprFdpDAE, method = "DAE"),
@@ -271,9 +330,23 @@ hlp <- rbind(
     cbind(tprFdporiginal, method = "no imputation")
 )
     hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
+    
+        # Define the FDP-control when using adjusted p-values of 0.05.
+    
+    fdr1 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.01, na.rm = T))
+    fdr5 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    fdr10 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.10, na.rm = T))
+    fdr1[fdr1 == 0] <- 1
+    fdr5[fdr5 == 0] <- 1
+    fdr10[fdr10 == 0] <- 1
+    results_fdp1[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr1$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp5[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr5$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp10[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr10$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+
     select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
     select[select == 0] <- 1
-
+    
+        # Make the TPR-FDP plots for comparison i
 
 tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no imputation")) %>% 
     ggplot(aes(x = fdp, y = tpr, color = method)) +
@@ -305,6 +378,17 @@ legend <- ggpubr::get_legend(hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF
 
 tprFdpPlots
 ```
+```{r}
+write.xlsx(results_fdp1, file= here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_3labs_fdp_0.01", row.names=TRUE)
+write.xlsx(results_fdp5, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_3labs_fdp_0.05", append=TRUE, row.names=TRUE)
+write.xlsx(results_fdp10, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_3labs_fdp_0.10", append=TRUE, row.names=TRUE)
+
+```
 
 
 ```{r}
@@ -323,8 +407,40 @@ ggsave(filename = here("Figures/full_plot_tprfdp_alllabs.pdf"),
        plot = full_plot_tprfdp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
 ```
+```{r}
+
+excel_supp_fig_37 <- bind_rows(
+  lapply(names(tprFdpPlots), function(n) {
+    df <- tprFdpPlots[[i]]$data[ , c("tpr", "fdp", "method")] %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+library(openxlsx)
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_37")
+
+# Write data
+writeData(wb, "Supp_fig_37", excel_supp_fig_37)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+
+
+# Figures log-FC
 
 ```{r}
+
+# Define the true logFC for the UPS proteins between the different conditions, which are
+# known in advance. The Yeast proteins have a true logFC of 0.
 
 y_intercepts <- data.frame(yintercept = c(log2(c(
     c(0.74, 2.22, 6.67, 20) / c(0.25), 
@@ -333,12 +449,16 @@ y_intercepts <- data.frame(yintercept = c(log2(c(
     20/6.67)), rep(0, 10)),
     "ups" = rep(c("Human spike-in", "Yeast"), each = 10))
 
+# Make the logFC plots for spike-in UPS and non differential Yeast proteins for
+# comparison i.
+
 
 logFC_plots <- list()
 for (i in comparisons_loop)
 {
 
-    
+   # Extract the estimated logFCs by the msqrob2 model.
+
     logFC <- data.frame(
         GMF = rowData(pe_sgd[["msqrobAggregate"]])[[i]][, 1],
     DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][, 1],
@@ -405,3 +525,26 @@ ggsave(filename = here("Analyses/CPTAC/Output/full_plot_lfc_alllabs.pdf"), plot 
 ggsave(filename = here("Figures/full_plot_lfc_alllabs.pdf"), plot = full_plot_lfc,
        device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 ```
+
+```{r}
+
+excel_supp_fig_38 <- bind_rows(
+  lapply(names(logFC_plots), function(n) {
+    df <- logFC_plots[[i]]$data %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_38")
+
+# Write data
+writeData(wb, "Supp_fig_38", excel_supp_fig_38)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+

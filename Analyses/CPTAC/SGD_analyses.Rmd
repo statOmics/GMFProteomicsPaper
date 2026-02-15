@@ -26,6 +26,8 @@ set.seed(100)
 # Original data
 
 ```{r}
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
+
 sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
 
 ```
@@ -34,6 +36,8 @@ sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
 ```{r}
 begin_time <- Sys.time()
 family <- gaussian()
+
+#Run GMF on the original data that is filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
 sgd <-  calculateGMF(sce, family = family, exprs_values = "logintensities", 
                        control.alg = list(tol = 0.001, maxiter = 10000),
                        ncomponents = 6)
@@ -50,10 +54,14 @@ saveRDS(time_diff, file = here("Analyses","CPTAC","Output","sgd_time.RDS"))
 ```
 
 
-# Imputed missing data
+# simulated missing data
 
 
 ```{r}
+
+# Run GMF for the different simulations in which
+# 25, 50 and 75% of the simulated missing values are missing due to low abundance.
+
 
 for(i in c(1:10)){
   MISTOT10_MNAR25 <- readRDS(paste0(here("Data","CPTAC_data"),"/CPTAC_MISTOT10_MNAR25_", i, ".RDS"))

@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "NAguideR analyses"
 output: html_document
 date: '2024-07-18'
 ---
@@ -24,10 +24,14 @@ source(here("R-functions","NAguideR_functions.R"))
 
 set.seed(100)
 
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
 sce <- readRDS(file = here("Data/CPTAC_data/CPTAC_sce.RDS"))
 data <- t(assay(sce, "logintensities"))
 
+# Considering zero, minimum, KNN and QRILC imputation
 methods <- c("zero", "minimum", "knnmethod", "qrilc")
+
+# Impute missing values with the different methods.
 for(i in methods){
   
   begin_time <- Sys.time()
@@ -53,8 +57,13 @@ for(i in methods){
 ```{r}
 set.seed(100)
 
+# Impute missing values with the different methods for the different simulations in which
+# 25% of the simulated missing values are missing due to low abundance.
+
 for (j in c(1:10)){
   sce <- readRDS(file = paste0(here("Data/CPTAC_data"), "/CPTAC_MISTOT10_MNAR25_", j, ".RDS"))
+  
+  # Filter rows with all missing values in a row
   data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
 
 methods <- c("zero", "minimum", "knnmethod", "qrilc")
@@ -77,8 +86,13 @@ methods <- c("zero", "minimum", "knnmethod", "qrilc")
 ```{r}
 set.seed(100)
 
+# Impute missing values with the different methods for the different simulations in which
+# 50% of the simulated missing values are missing due to low abundance.
+
 for (j in c(1:10)){
   sce <- readRDS(file = paste0(here("Data/CPTAC_data"), "/CPTAC_MISTOT10_MNAR50_", j, ".RDS"))
+  
+    # Filter rows with all missing values in a row
   data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
 
 methods <- c("zero", "minimum", "knnmethod", "qrilc")
@@ -101,8 +115,13 @@ methods <- c("zero", "minimum", "knnmethod", "qrilc")
 ```{r}
 set.seed(100)
 
+# Impute missing values with the different methods for the different simulations in which
+# 75% of the simulated missing values are missing due to low abundance.
+
 for (j in c(1:10)){
   sce <- readRDS(file = paste0(here("Data/CPTAC_data"), "/CPTAC_MISTOT10_MNAR75_", j, ".RDS"))
+  
+  # Filter rows with all missing values in a row
   data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
 
 methods <- c("zero", "minimum", "knnmethod", "qrilc")

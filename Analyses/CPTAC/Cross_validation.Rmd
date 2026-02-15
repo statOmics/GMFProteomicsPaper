@@ -21,6 +21,7 @@ devtools::load_all(here("omicsGMF"))
 
 # Load data
 ```{r}
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
 sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
 
 ```
@@ -31,6 +32,8 @@ sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
 set.seed(100)
 
 family <- gaussian()
+# Run the cross-validation to select the number of latent factors without known covariates.
+
 cv <- calculateCVGMF(sce, family = family, 
                       exprs_values = "logintensities", ncomponents = seq(1,10,1), 
                       control.alg = list(tol = 0.001, maxiter = 10000), 

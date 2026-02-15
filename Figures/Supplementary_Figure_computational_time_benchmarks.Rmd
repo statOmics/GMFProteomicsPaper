@@ -1,0 +1,248 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+library(dplyr)
+```
+
+```{r}
+temp = list.files(path = here("Analyses/Computational_time_benchmark/Output/"), 
+                  pattern = "\\.txt$")
+temp
+```
+
+
+```{r}
+results = lapply(paste0(here("Analyses/Computational_time_benchmark/Output/"),temp), function(file) {
+  # Extract just the filename
+  fname = basename(file)
+  
+  # Regex to match method, features, samples (supports scientific notation)
+  matches = regmatches(fname, regexec(
+    "time_measurement_([^_]+)_default_([0-9eE\\+]+)_features_([0-9eE\\+]+)\\.txt", fname))[[1]]
+  
+  method = matches[2]
+  features = as.numeric(matches[3])
+  samples = as.numeric(matches[4])
+  
+  # Read the elapsed time
+  line = readLines(file, warn = FALSE)[1]
+  time = as.numeric(sub(".*?([0-9.]+).*", "\\1", line))
+  
+  data.frame(
+    method = method,
+    features = features,
+    samples = samples,
+    elapsed_time = time
+  )
+})
+
+final_df = do.call(rbind, results)
+
+
+
+```
+
+
+```{r}
+
+temp_rds = list.files(
+  path = here("Analyses/Computational_time_benchmark/Output/"),
+  pattern = "_time_.*_samples\\.RDS$",
+  full.names = TRUE
+)
+
+# Extract info from filename
+results_rds = lapply(temp_rds, function(file) {
+  fname = basename(file)
+  
+  # Regex: <method>_time_<features>_features_<samples>_samples.RDS
+  matches = regmatches(fname, regexec(
+    "^([^_]+)_time_([0-9eE\\+]+)_features_([0-9eE\\+]+)_samples\\.RDS$", fname))[[1]]
+  
+  method = matches[2]
+  features = as.numeric(matches[3])
+  samples = as.numeric(matches[4])
+  
+  # Optionally read time from the .RDS file (e.g. if it contains a number)
+  elapsed_time = readRDS(file)  # Uncomment if needed
+
+  
+  data.frame(
+    method = method,
+    features = features,
+    samples = samples,
+    elapsed_time = elapsed_time
+  )
+})
+
+# Combine
+final_df_rds = do.call(rbind, results_rds)
+
+# View
+print(final_df_rds)
+```
+
+
+
+```{r}
+
+temp_LF = list.files(
+  path = here("Analyses/Computational_time_benchmark/Output/"),
+  pattern = "_time_.*_samples_[0-9]+\\.RDS$",
+  full.names = TRUE
+)
+
+
+
+# Extract info from filename
+results_LF = lapply(temp_LF, function(file) {
+  fname = basename(file)
+  
+  # Regex: <method>_time_<features>_features_<samples>_samples.RDS
+  matches = regmatches(fname, regexec(
+    "^([^_]+)_time_([0-9eE\\+]+)_features_([0-9eE\\+]+)_samples_([0-9eE\\+]+)\\.RDS$", fname))[[1]]
+  
+  method = matches[2]
+  features = as.numeric(matches[3])
+  samples = as.numeric(matches[4])
+  dims = as.numeric(matches[5])
+  
+  # Optionally read time from the .RDS file (e.g. if it contains a number)
+  elapsed_time = readRDS(file)  # Uncomment if needed
+
+  
+  data.frame(
+    method = method,
+    features = features,
+    samples = samples,
+    dims = dims,
+    elapsed_time = elapsed_time
+  )
+})
+
+# Combine
+final_df_LF = do.call(rbind, results_LF)
+
+# View
+final_df_LF$elapsed_time <- as.numeric(final_df_LF$elapsed_time, units = "secs")
+print(final_df_LF)
+```
+
+
+
+```{r}
+df_time <- rbind(final_df, final_df_rds)
+```
+
+```{r}
+myColors <- c("#BC3C29FF",  "#E18727FF", "#E18727FF",
+              "#4269D0FF","#20854EFF", "#A463F2FF",
+              "#97BBF5FF", "#6CC5B0FF", "#7876B1FF",
+              "#9498A0FF", "#A37E7BFF","#9C6B4EFF",
+              "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
+              "black")
+names(myColors) <- c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE-CV","VAE-CV", "CF-CV",
+                     "NIPALS", "EM-PCA",
+                      "KNN", "QRILC","zero", "minimum",
+                     "no imputation")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+colScale_fill <- scale_fill_manual(name = "Method",values = myColors)
+```
+
+```{r}
+df_time$method <- factor(df_time$method, 
+                         levels = c("sgd", "DAE", "VAE", "CF", "nipals", "empca",
+                                                    "knnmethod","qrilc","zero","minimum"),
+                         labels = c("GMF", "DAE", "VAE", "CF", "NIPALS", "EM-PCA",
+                                    "KNN", "QRILC", "zero", "minimum"))
+
+final_df_LF$method <- factor(final_df_LF$method, 
+                         levels = c("sgd", "DAE", "VAE", "CF", "nipals", "empca",
+                                                    "knnmethod","qrilc","zero","minimum"),
+                         labels = c("GMF", "DAE", "VAE", "CF", "NIPALS", "EM-PCA",
+                                    "KNN", "QRILC", "zero", "minimum"))
+```
+
+```{r}
+plot_features <- ggplot(df_time %>% dplyr::filter(samples == 1000), 
+       aes(x = log10(features), y = log10(elapsed_time), col = method, group = method)) +
+  geom_point() + 
+  geom_line() + 
+  colScale + 
+  theme_bw() + 
+  xlab("Number of log10(features)") +
+  ylab("log10(time in seconds)")
+
+ggsave(filename = here("Figures/Supplementary_computational_time_features.pdf"), 
+       plot = plot_features, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+plot_samples <- ggplot(df_time %>% dplyr::filter(features == 5000), 
+       aes(x = log10(samples), y = log10(elapsed_time), col = method, group = method)) +
+  geom_point() + 
+  geom_line() + 
+  colScale + 
+  theme_bw() + 
+  xlab("Number of log10(samples)") +
+  ylab("log10(time in seconds)")
+
+ggsave(filename = here("Figures/Supplementary_computational_time_samples.pdf"), 
+       plot = plot_samples, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+plot_LF <- ggplot(final_df_LF, 
+       aes(x = dims, y = log10(elapsed_time), col = method, group = method)) +
+  geom_point() + 
+  geom_line() + 
+  colScale + 
+  theme_bw() + 
+  xlab("Number of latent factors") +
+  ylab("log10(time in seconds)")
+
+ggsave(filename = here("Figures/Supplementary_computational_time_LF.pdf"), 
+       plot = plot_LF, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+```{r}
+
+ggsave(filename = here("Figures/Supplementary_computational_time.pdf"), 
+       plot = ggarrange(plot_samples, plot_features, plot_LF, common.legend = T, nrow = 1, 
+                        labels = "AUTO", legend = "bottom"),
+       device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+```
+
+```{r}
+library(openxlsx)
+
+excel_supp_fig_14 <- rbind(df_time)
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_14")
+
+# Write data
+writeData(wb, "Supp_fig_14", excel_supp_fig_14)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+
+```
+
+
+

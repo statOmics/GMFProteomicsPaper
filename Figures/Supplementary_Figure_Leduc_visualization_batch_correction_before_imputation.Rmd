@@ -1,0 +1,175 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-07"
+---
+
+```{r}
+library(here)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(fullRankMatrix)
+library(limma)
+library(RColorBrewer)
+library(tidyverse)
+library(readr)
+
+```
+
+
+
+# Leduc
+## importing data
+
+
+```{r}
+sce <- readRDS(file = here("Data/leduc2022_pSCoPE_data/leduc_sce.RDS"))
+sgd <- readRDS(file = here("Analyses/Leduc/Output/sgd_sce.RDS"))
+
+sgd_batch <- readRDS(file = here("Analyses/Leduc/Output/sgd_batch_sce.RDS"))
+sgd_batch[,1] <- - sgd_batch[,1]
+sgd_batch[,2] <- - sgd_batch[,2]
+
+KNN <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/knnmethod_batch_removed_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/nipals_batch_removed_sce.RDS"))
+
+
+DAE <- read.csv(file = here("Analyses/Leduc/Output_batch_effect_removal/DAE_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/Leduc/Output_batch_effect_removal/VAE_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Leduc/Output_batch_effect_removal/CF_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+
+
+QRILC <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/qrilc_batch_removed_sce.RDS"))
+
+zero <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/zero_batch_removed_sce.RDS"))
+
+minimum <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/minimum_batch_removed_sce.RDS"))
+
+
+
+
+```
+
+```{r}
+subcluster <- rep(NA, ncol(sce))
+subcluster[is.na(colData(sce)$MelanomaSubCluster)] <- "Monocyte    "
+subcluster[colData(sce)$MelanomaSubCluster == "A"] <- "Melanoma A    "
+subcluster[colData(sce)$MelanomaSubCluster == "B"] <- "Melanoma B    "
+subcluster <- as.factor(subcluster)
+
+```
+
+```{r}
+nipals_imputed <- t(assay(sce))
+nipals_imputed[is.na(nipals_imputed)] <- nipals$fitted[is.na(nipals_imputed)]
+
+```
+
+## PCA plots
+
+
+```{r}
+DAE_PC <- prcomp(DAE, rank = 40)
+VAE_PC <- prcomp(VAE, rank = 40)
+CF_PC <- prcomp(CF, rank = 40)
+
+KNN_PC <- prcomp(KNN, rank = 40)
+QRILC_PC <- prcomp(QRILC, rank = 40)
+zero_PC <- prcomp(zero, rank = 40)
+minimum_PC <- prcomp(minimum, rank = 40)
+
+titles <- c("GMF Batch", "DAE","VAE","CF","NIPALS","KNN","QRILC","zero","minimum")
+MF <- list(sgd_batch, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRILC_PC$x, zero_PC$x, minimum_PC$x)
+
+
+```
+
+
+### PCA plots subcluster no batch correction
+```{r}
+lcBatch <- factor(colData(sce)$lcbatch, levels = c("A", "C"), labels = c("Batch 1", "Batch 2"))
+
+Leduc_pca_plot_no_batch_correction <- lapply(1:9, function(i){
+ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = subcluster, shape = lcBatch)) +
+  geom_point(alpha = 0.5) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() + labs(col = "Celltype:   ", shape = "LC-batch:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
+          legend.position = "right", legend.box="vertical") + 
+    scale_colour_manual(name = "Cell type:   ", 
+                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF")) + 
+   guides(nrow = 2, 
+    colour = guide_legend(order = 1, override.aes = list(alpha = 1)), 
+    shape = guide_legend(order = 2, override.aes = list(alpha = 1, colour = "black"))
+  )
+
+})
+
+Leduc_pca_plot_no_batch_correction[[1]] <- Leduc_pca_plot_no_batch_correction[[1]] + xlab("GMF 1") + ylab("GMF 2")
+
+Leduc_pca_plot_no_batch_correction_1 <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]],
+                                                          Leduc_pca_plot_no_batch_correction[[2]],
+                                                          Leduc_pca_plot_no_batch_correction[[3]], 
+                                                          Leduc_pca_plot_no_batch_correction[[4]],
+                                                          Leduc_pca_plot_no_batch_correction[[5]],
+                                                          Leduc_pca_plot_no_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+Leduc_pca_plot_no_batch_correction_1_no_legend <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]], Leduc_pca_plot_no_batch_correction[[2]],
+                                                                    Leduc_pca_plot_no_batch_correction[[3]], 
+                                    Leduc_pca_plot_no_batch_correction[[4]], Leduc_pca_plot_no_batch_correction[[5]], Leduc_pca_plot_no_batch_correction[[6]],
+                        ncol = 2, nrow = 3, align = "h", legend = "none")
+
+Leduc_pca_plot_no_batch_correction_2 <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]], Leduc_pca_plot_no_batch_correction[[2]],
+                                                          Leduc_pca_plot_no_batch_correction[[3]], 
+                                    Leduc_pca_plot_no_batch_correction[[4]], Leduc_pca_plot_no_batch_correction[[5]], Leduc_pca_plot_no_batch_correction[[6]],
+                                    Leduc_pca_plot_no_batch_correction[[7]], Leduc_pca_plot_no_batch_correction[[8]], Leduc_pca_plot_no_batch_correction[[9]],
+                        ncol = 3, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
+
+legend_Leduc_pca_plot_no_batch_correction <- as_ggplot(get_legend(Leduc_pca_plot_no_batch_correction[[1]]))
+
+
+
+ggsave(plot = Leduc_pca_plot_no_batch_correction_2, filename = here("Figures/Supplementary_Figure_visualisations_Leduc_all_batch_removed_prior_to_imputation.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
+library(openxlsx)
+
+names(MF) <- titles
+excel_supp_fig_7 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Cell Type" = subcluster,
+             "lcBatch" = lcBatch,
+             "method" = n)
+    df
+  })
+)
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_7")
+
+# Write data
+writeData(wb, "Supp_fig_7", excel_supp_fig_7)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+
+```
+
+
+

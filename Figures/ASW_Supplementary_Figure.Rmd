@@ -1,0 +1,566 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(BiocParallel)
+library(ggplot2)
+
+```
+
+
+```{r}
+myColors <- c("#BC3C29FF",  "#E18727FF", "#E18727FF",
+              "#4269D0FF","#20854EFF", "#A463F2FF",
+              "#97BBF5FF", "#6CC5B0FF", "#7876B1FF",
+              "#9498A0FF","grey",
+              "#9C6B4EFF","#D4A98FFF",
+              "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
+               "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
+              "black")
+names(myColors) <- c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC","zero", "minimum",
+                      "QRILC Batch","zero Batch", "minimum Batch",
+                     "no imputation")
+
+
+myColors <- c("#BC3C29FF",  "#E18727FF", 
+              "#4269D0FF","#20854EFF", "#A463F2FF",
+              "#9498A0FF",
+              "#9C6B4EFF",
+              "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF")
+names(myColors) <- c("GMF", "GMF Batch", 
+                     "DAE", "VAE", "CF",
+                      "NIPALS",
+                      "KNN", "QRILC","zero", "minimum")
+colScale <- scale_fill_manual(name = "Method",values = myColors, drop = FALSE)
+```
+
+```{r}
+register(BPPARAM = MulticoreParam(workers = 1))
+```
+```{r}
+
+computeASW <- function(mat, label, cluster) {
+    d <- dist(mat)
+    sil <- silhouette(as.numeric(as.factor(label)), dist = d)
+    mean(sil[, "sil_width"])
+}
+
+ASW_per_batch <- function(MF, group, label){
+  
+  mean(sapply(X = unique(group), 
+              FUN = function(i) computeASW(MF[group == i, ], label = label[group == i])))
+  
+}
+```
+
+
+```{r}
+library(QFeatures)
+```
+
+# Petrosius 
+```{r}
+sce <- readRDS(file = here("Data/Petrosius/petrosius_sce.RDS"))
+
+omicsGMF <- readRDS(file = here("Analyses/Petrosius/Output/sgd_sce.RDS"))
+
+DAE <- read.csv(file = here("Analyses/Petrosius/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+VAE <- read.csv(file = here("Analyses/Petrosius/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Petrosius/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+KNN <- readRDS(file = here("Analyses/Petrosius/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Petrosius/Output/nipals_sce.RDS"))
+QRILC <- readRDS(file = here("Analyses/Petrosius/Output/qrilc_sce.RDS"))
+zero <- readRDS(file = here("Analyses/Petrosius/Output/zero_sce.RDS"))
+minimum <- readRDS(file = here("Analyses/Petrosius/Output/minimum_sce.RDS"))
+```
+
+```{r}
+set.seed(100)
+DAE_PC <- prcomp(DAE, rank = 5)
+VAE_PC <- prcomp(VAE, rank = 5)
+CF_PC <- prcomp(CF, rank = 5)
+
+KNN_PC <- prcomp(KNN, rank = 5)
+QRILC_PC <- prcomp(QRILC, rank = 5)
+zero_PC <- prcomp(zero, rank = 5)
+minimum_PC <- prcomp(minimum, rank = 5)
+
+cluster <- colData(sce)$SampleType
+
+MF_petrosius <- list(omicsGMF[,c(1:2)], 
+           DAE_PC$x[,c(1:2)], VAE_PC$x[,c(1:2)],
+           CF_PC$x[,c(1:2)], KNN_PC$x[,c(1:2)],
+           nipals$scores[,c(1:2)], QRILC_PC$x[,c(1:2)],
+           zero_PC$x[,c(1:2)], minimum_PC$x[,c(1:2)])
+Methods <- c("GMF", "DAE","VAE","CF","KNN","NIPALS","QRILC","zero","minimum")
+names(MF_petrosius) <- Methods
+
+```
+
+
+
+
+```{r}
+set.seed(100)
+library(cluster)
+
+
+petrosius_ASW <- sapply(MF_petrosius, computeASW, label = cluster)
+
+
+```
+
+
+```{r}
+df <- data.frame(
+  method = names(petrosius_ASW),
+  value = as.numeric(petrosius_ASW)
+)
+
+df$method <- factor(df$method, levels = names(myColors))
+
+if (!"GMF Batch" %in% df$method) {
+  df <- rbind(df, data.frame(method = "GMF Batch", value = NA))
+}
+
+
+plot_Petrosius_no_legend <- ggplot(df %>% dplyr::filter(method %in% c("GMF",
+                     "DAE", "VAE", "CF",
+                      "NIPALS",
+                      "KNN", "QRILC","zero", "minimum")), aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Petrosius data")
+
+plot_Petrosius_legend <- as_ggplot(get_legend(ggplot(df, aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Petrosius data")))
+
+
+
+
+
+
+```
+
+
+# Leduc first imputation
+```{r}
+sce <- readRDS(file = here("Data/leduc2022_pSCoPE_data/leduc_sce.RDS"))
+sgd_batch <- readRDS(file = here("Analyses/Leduc/Output/sgd_batch_sce.RDS"))
+DAE <- read.csv(file = here("Analyses/Leduc/Output/DAE_default_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses/Leduc/Output/VAE_default_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Leduc/Output/CF_default_sce.csv"),
+                  header = T, row.names = 1)
+
+
+KNN <- readRDS(file = here("Analyses/Leduc/Output/knnmethod_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Leduc/Output/nipals_sce.RDS"))
+QRILC <- readRDS(file = here("Analyses/Leduc/Output/qrilc_sce.RDS"))
+zero <- readRDS(file = here("Analyses/Leduc/Output/zero_sce.RDS"))
+minimum <- readRDS(file = here("Analyses/Leduc/Output/minimum_sce.RDS"))
+
+nipals_imputed <- t(assay(sce))
+nipals_imputed[is.na(nipals_imputed)] <- nipals$fitted[is.na(nipals_imputed)]
+
+subcluster <- rep(NA, ncol(sce))
+subcluster[is.na(colData(sce)$MelanomaSubCluster)] <- "Monocyte    "
+subcluster[colData(sce)$MelanomaSubCluster == "A"] <- "Melanoma A    "
+subcluster[colData(sce)$MelanomaSubCluster == "B"] <- "Melanoma B    "
+subcluster <- as.factor(subcluster)
+
+```
+
+
+```{r}
+design <- model.matrix(~Set+Channel, colData(sce))
+fmX <- make_full_rank_matrix(design)
+X <- fmX$matrix
+
+
+DAE_correction <- lmFit(t(DAE), design = X)
+VAE_correction <- lmFit(t(VAE), design = X)
+CF_correction <- lmFit(t(CF), design = X)
+
+KNN_correction <- lmFit(t(KNN), design = X)
+nipals_correction <- lmFit(t(nipals_imputed), design = X)
+QRILC_correction <- lmFit(t(QRILC), design = X)
+zero_correction <- lmFit(t(zero), design = X)
+minimum_correction <- lmFit(t(minimum), design = X)
+
+
+resids_DAE_correction <- t(DAE) - 
+  t(DAE_correction$design %*% t(DAE_correction$coefficients))
+resids_VAE_correction <- t(VAE) - 
+  t(VAE_correction$design %*% t(VAE_correction$coefficients))
+resids_CF_correction <- t(CF) - 
+  t(CF_correction$design %*% t(CF_correction$coefficients))
+resids_KNN_correction <- t(KNN) - 
+  t(KNN_correction$design %*% t(KNN_correction$coefficients))
+resids_nipals_correction <- t(nipals_imputed) - 
+  t(nipals_correction$design %*% t(nipals_correction$coefficients))
+resids_QRILC_correction <- t(QRILC) - 
+  t(QRILC_correction$design %*% t(QRILC_correction$coefficients))
+resids_zero_correction <- t(zero) - 
+  t(zero_correction$design %*% t(zero_correction$coefficients))
+resids_minimum_correction <- t(minimum) - 
+  t(minimum_correction$design %*% t(minimum_correction$coefficients))
+
+
+
+
+DAE_correction_PCs <- prcomp(t(resids_DAE_correction), rank = 10)
+VAE_correction_PCs <- prcomp(t(resids_VAE_correction), rank = 10)
+CF_correction_PCs <- prcomp(t(resids_CF_correction), rank = 10)
+
+KNN_correction_PCs <- prcomp(t(resids_KNN_correction), rank = 10)
+nipals_correction_PCs <- prcomp(t(resids_nipals_correction), rank = 10)
+QRILC_correction_PCs <- prcomp(t(resids_QRILC_correction), rank = 10)
+zero_correction_PCs <- prcomp(t(resids_zero_correction), rank = 10)
+minimum_correction_PCs <- prcomp(t(resids_minimum_correction), rank = 10)
+
+MF <- list(sgd_batch[,c(1:2)], 
+           DAE_correction_PCs$x[,c(1:2)], VAE_correction_PCs$x[,c(1:2)],
+           CF_correction_PCs$x[,c(1:2)], KNN_correction_PCs$x[,c(1:2)],
+           nipals_correction_PCs$x[,c(1:2)], QRILC_correction_PCs$x[,c(1:2)],
+           zero_correction_PCs$x[,c(1:2)], minimum_correction_PCs$x[,c(1:2)])
+Methods <- c("GMF Batch", "DAE","VAE","CF","KNN","NIPALS","QRILC","zero","minimum")
+names(MF) <- Methods
+```
+
+
+
+```{r}
+set.seed(100)
+library(cluster)
+
+leduc_ASW <- sapply(MF, computeASW, label = subcluster)
+leduc_technical_ASW <- sapply(MF, ASW_per_batch, 
+                              group = subcluster, label = colData(sce)$lcbatch)
+```
+
+
+```{r}
+df <- data.frame(
+  method = names(leduc_ASW),
+  value = as.numeric(leduc_ASW)
+)
+
+df$method <- factor(df$method, levels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC","zero", "minimum",
+                     "no imputation"), 
+                    labels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC","zero", "minimum",
+                     "no imputation"))
+
+
+
+
+plot_Leduc <- ggplot(df, aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Leduc data - Imputation followed by \nbatch correction - Celltype")
+
+
+df <- data.frame(
+  method = names(leduc_technical_ASW),
+  value = as.numeric(leduc_technical_ASW)
+)
+df$method <- factor(df$method, levels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC","zero", "minimum",
+                     "no imputation"), 
+                    labels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC Batch","zero Batch", "minimum Batch",
+                     "no imputation"))
+
+
+df <- data.frame(
+  method = names(leduc_technical_ASW),
+  value = as.numeric(leduc_technical_ASW)
+)
+df$method <- factor(df$method, levels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC","zero", "minimum",
+                     "no imputation"))
+
+
+plot_Leduc_technical <- ggplot(df, aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Leduc data - Imputation followed by \nbatch correction - Batch effects")
+
+
+
+```
+
+
+
+
+# Leduc first batch correction
+```{r}
+sce <- readRDS(file = here("Data/leduc2022_pSCoPE_data/leduc_sce.RDS"))
+sgd_batch <- readRDS(file = here("Analyses/Leduc/Output/sgd_batch_sce.RDS"))
+DAE <- read.csv(file = 
+          here("Analyses/Leduc/Output_batch_effect_removal/DAE_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+VAE <- read.csv(file = here("Analyses/Leduc/Output_batch_effect_removal/VAE_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+
+CF <- read.csv(file = here("Analyses/Leduc/Output_batch_effect_removal/CF_default_batch_removed_sce.csv"),
+                  header = T, row.names = 1)
+
+
+KNN <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/knnmethod_batch_removed_sce.RDS"))
+nipals <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/nipals_batch_removed_10_ncomp_sce.RDS"))
+QRILC <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/qrilc_batch_removed_sce.RDS"))
+zero <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/zero_batch_removed_sce.RDS"))
+minimum <- readRDS(file = here("Analyses/Leduc/Output_batch_effect_removal/minimum_batch_removed_sce.RDS"))
+
+nipals_imputed <- t(assay(sce))
+nipals_imputed[is.na(nipals_imputed)] <- nipals$fitted[is.na(nipals_imputed)]
+
+subcluster <- rep(NA, ncol(sce))
+subcluster[is.na(colData(sce)$MelanomaSubCluster)] <- "Monocyte    "
+subcluster[colData(sce)$MelanomaSubCluster == "A"] <- "Melanoma A    "
+subcluster[colData(sce)$MelanomaSubCluster == "B"] <- "Melanoma B    "
+subcluster <- as.factor(subcluster)
+
+```
+
+```{r}
+
+DAE_correction_PCs <- prcomp(DAE, rank = 10)
+VAE_correction_PCs <- prcomp(VAE, rank = 10)
+CF_correction_PCs <- prcomp(CF, rank = 10)
+
+KNN_correction_PCs <- prcomp(KNN, rank = 10)
+nipals_correction_PCs <- nipals$scores
+QRILC_correction_PCs <- prcomp(QRILC, rank = 10)
+zero_correction_PCs <- prcomp(zero, rank = 10)
+minimum_correction_PCs <- prcomp(minimum, rank = 10)
+
+MF_batch_correction_first <- list(sgd_batch[,c(1:2)], 
+           DAE_correction_PCs$x[,c(1:2)], VAE_correction_PCs$x[,c(1:2)],
+           CF_correction_PCs$x[,c(1:2)], KNN_correction_PCs$x[,c(1:2)],
+           nipals_correction_PCs[,c(1:2)], QRILC_correction_PCs$x[,c(1:2)],
+           zero_correction_PCs$x[,c(1:2)], minimum_correction_PCs$x[,c(1:2)])
+Methods <- c("GMF Batch", "DAE","VAE","CF","KNN","NIPALS","QRILC","zero","minimum")
+# 
+# Methods <- c("GMF Batch", "DAE Batch","VAE Batch","CF Batch",
+#              "KNN Batch","NIPALS Batch","QRILC Batch","zero Batch","minimum Batch")
+names(MF_batch_correction_first) <- Methods
+```
+
+
+
+```{r}
+set.seed(100)
+library(cluster)
+
+leduc_ASW_batch_correction_first <- 
+  sapply(MF_batch_correction_first, computeASW, label = subcluster)
+leduc_technical_ASW_batch_correction_first <- 
+  sapply(MF_batch_correction_first, ASW_per_batch, 
+                              group = subcluster, label = colData(sce)$lcbatch)
+
+```
+
+
+
+```{r}
+df <- data.frame(
+  method = names(leduc_ASW_batch_correction_first),
+  value = as.numeric(leduc_ASW_batch_correction_first)
+)
+df$method <- factor(df$method, levels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", 
+                     "QRILC", "QRILC Batch",
+                     "zero", "zero Batch", 
+                     "minimum", "minimum Batch",
+                     "no imputation"), 
+                    labels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", 
+                     "QRILC", "QRILC Batch",
+                     "zero", "zero Batch",
+                     "minimum", "minimum Batch",
+                     "no imputation"))
+
+
+
+
+plot_Leduc_batch_correction <- ggplot(df, aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Leduc data - Batch correction \nfollowed by imputation - Celltype")
+
+
+df <- data.frame(
+  method = names(leduc_technical_ASW_batch_correction_first),
+  value = as.numeric(leduc_technical_ASW_batch_correction_first)
+)
+df$method <- factor(df$method, levels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", 
+                     "QRILC", "QRILC Batch",
+                     "zero", "zero Batch", 
+                     "minimum", "minimum Batch",
+                     "no imputation"), 
+                    labels = c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", 
+                     "QRILC", "QRILC Batch",
+                     "zero", "zero Batch",
+                     "minimum", "minimum Batch",
+                     "no imputation"))
+
+
+
+plot_Leduc_batch_correction_technical <- ggplot(df, aes(x = method, y = value, fill = method)) +
+  geom_col() +
+  #geom_text(aes(label = value), vjust = -0.5) +
+  theme_minimal() + 
+  theme_bw() + 
+  colScale + 
+  ylab("Average Silhouette width") +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  ggtitle("Leduc data - Batch correction \nfollowed by imputation - Batch effects")
+
+
+
+```
+
+```{r}
+merged_plot <- ggarrange(ggarrange(plot_Petrosius_no_legend + theme(legend.position = "none"), 
+                                   plot_Petrosius_legend, 
+                                   ncol = 2, labels = list("A", "")), 
+          ggarrange(plot_Leduc + theme(legend.position = "none") + ylim(-0.2, 0.7), 
+                    plot_Leduc_technical + theme(legend.position = "none") + ylim(-0.05, 0.8),
+                    ncol = 2, labels = list("B", "C")),
+          ggarrange(plot_Leduc_batch_correction + theme(legend.position = "none") + ylim(-0.2, 0.7),
+                    plot_Leduc_batch_correction_technical + theme(legend.position = "none") +
+                      ylim(-0.05, 0.8), 
+                    ncol = 2, labels = list("D", "E")),
+          nrow = 3, ncol = 1)
+
+ggsave(plot = merged_plot, filename = here("Figures/Supplementary_figure_ASW.pdf"), device = "pdf", dpi = 500,
+       units = "mm", width = 180, height = 215)
+```
+
+
+```{r}
+library(openxlsx)
+
+excel_supp_fig_8 <- rbind(plot_Petrosius_no_legend$data %>%
+                       as.data.frame() %>% 
+                       mutate("data" = "Petrosius"),
+                       plot_Leduc$data %>%
+                       as.data.frame() %>% 
+                       mutate("data" = "Leduc imputation followed by batch correction - Celltype"),
+                       plot_Leduc_technical$data %>%
+                       as.data.frame() %>% 
+                       mutate("data" = "Leduc imputation followed by batch correction - Batch"),
+                       plot_Leduc_batch_correction$data %>%
+                       as.data.frame() %>% 
+                       mutate("data" = "Leduc batch correction followed by imputation - Celltype"),
+                       plot_Leduc_batch_correction_technical$data %>%
+                       as.data.frame() %>% 
+                       mutate("data" = "Leduc batch correction followed by imputation - Batch"))
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_8")
+
+# Write data
+writeData(wb, "Supp_fig_8", excel_supp_fig_8)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+

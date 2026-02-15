@@ -1,0 +1,304 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(here)
+library(scater)
+library(data.table)
+library(openxlsx)
+set.seed(100)
+
+#devtools::load_all(here("omicsGMF"))
+
+```
+
+```{r}
+MAE_calculation <- function(imputed, original){
+  mean(abs(imputed-original))
+}
+
+reconstruct_nipals <- function(nipals){
+  
+  reconstructed <- nipals$fitted
+  
+  return(reconstructed)
+}
+```
+
+
+
+
+```{r}
+df_all <- data.frame("MNAR" = NULL,
+                     "MAE" = NULL,
+                     "method" = NULL)
+
+for(i in c("25","50","75")){
+    for(j in c(1:10)){
+
+  original <- readRDS(file =  here("Data","leduc2022_pSCoPE_data", "leduc_sce.RDS"))
+  
+  NAs <- readRDS(file  =  here("Data","leduc2022_pSCoPE_data", paste0("leduc_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  original <- original[rowMeans(is.na(NAs$data)) < 1 ,]
+  
+  differences <- readRDS(
+        file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR", i, "_", j, "_differences.csv")))
+
+  sgd <- readRDS(file = here("Analyses","Leduc", "Output", 
+                             paste0("sgd_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  sgd_batch <- readRDS(file = here("Analyses","Leduc", "Output", 
+                             paste0("sgd_batch_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  sgd_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd))
+  sgd_batch_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd_batch))
+
+
+  
+  DAE <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output", 
+                              paste0("DAE_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  DAE_default <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("DAE_default_batch_removed_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)+ 
+    t(differences)
+  
+  VAE <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output", 
+                              paste0("VAE_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  VAE_default <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("VAE_default_batch_removed_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)+ 
+    t(differences)
+  
+  CF <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output", 
+                              paste0("CF_default_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1)
+  
+  CF_default <- as.matrix(data.table::fread(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("CF_default_batch_removed_MISTOT10_MNAR", i, "_", j,".csv")),
+                  header = "auto"), rownames = 1) + t(differences)
+  
+    nipals <- readRDS(file = here("Analyses","Leduc", "Output",
+                              paste0("nipals_MISTOT10_MNAR", i, "_",j, ".RDS")))
+  nipals_reconstructed <- reconstruct_nipals(nipals) 
+  
+  nipals_default <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal",
+                              paste0("nipals_batch_removed_10_ncomp_MISTOT10_MNAR", i, "_",j, ".RDS")))
+  nipals_default_reconstructed <- reconstruct_nipals(nipals_default) + 
+    t(differences)
+  
+    knnmethod <- readRDS(file = here("Analyses","Leduc", "Output", 
+                              paste0("knnmethod_MISTOT10_MNAR", i, "_", j, ".RDS"))) 
+  
+
+
+  knnmethod_default <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("knnmethod_batch_removed_MISTOT10_MNAR", i, "_", j, ".RDS"))) + 
+    t(differences)
+  
+  qrilc <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("qrilc_batch_removed_MISTOT10_MNAR", i, "_", j, ".RDS"))) + 
+    t(differences)
+
+  zero <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal", 
+                              paste0("zero_batch_removed_MISTOT10_MNAR", i, "_", j, ".RDS")))+ 
+    t(differences)
+  minimum <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal",  
+                              paste0("minimum_batch_removed_MISTOT10_MNAR", i, "_", j, ".RDS")))+ 
+    t(differences)
+  
+
+  imputed_all <- t((NAs$MAR + NAs$MNAR)[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MAR <- t(NAs$MAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+  imputed_MNAR <- t(NAs$MNAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
+
+  
+  # all methods that are included in sapply
+  methods <- list(sgd_reconstructed,
+                  sgd_batch_reconstructed, 
+                  DAE, VAE, CF, 
+                  DAE_default, VAE_default, CF_default, 
+                  nipals_reconstructed, nipals_default_reconstructed, 
+                  knnmethod, knnmethod_default,
+                  qrilc ,zero, minimum)
+  methods_names <- c("SGD", 
+                     "SGD Batch", 
+                     "DAE-NN", "VAE-NN","CF-NN",
+                     "DAE-NN-default", "VAE-NN-default","CF-NN-default",
+                     "NIPALS", "NIPALS-default",
+                     "knnmethod", "knnmethod-default",
+                     "QRILC", "zero","minimum")
+  
+  #MAE calculation
+  MAE_all <- sapply(methods, FUN = function(x){
+    MAE_calculation(imputed = x[imputed_all], 
+                    original = t(assay(original, "logintensities"))[imputed_all])
+  })
+  
+
+  MAE_MAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MAR],
+                  original = t(assay(original, "logintensities"))[imputed_MAR])
+  })
+  
+  
+
+
+MAE_MNAR <- sapply(methods, FUN = function(x){
+  MAE_calculation(imputed = x[imputed_MNAR], 
+                  original = t(assay(original, "logintensities"))[imputed_MNAR])
+  })
+
+
+
+  
+  df_loop <- data.frame(
+                     "MNAR" = i,
+                     "MAE" = c(MAE_all,
+                               MAE_MNAR,
+                               MAE_MAR),
+                     "method" = rep(c(methods_names), times = 3),
+                     "missing_type" = rep(c("all","MNAR","MAR"), 
+                                          each = length(MAE_all)))
+  
+  
+  df_all <- rbind(df_all, df_loop)
+    }
+}
+
+df_all$MNAR <- factor(df_all$MNAR, levels = c("25","50","75"))
+df_all$method <- factor(df_all$method, 
+                        levels = c("SGD", "SGD Batch", 
+                     "DAE-NN","VAE-NN", "CF-NN",
+                     "DAE-NN-default","VAE-NN-default", "CF-NN-default",
+                     "NIPALS","NIPALS-default",
+                     "knnmethod", "knnmethod-default",
+                     "QRILC", "zero","minimum"))
+```
+
+
+```{r}
+#saveRDS(object = df_all, file = here("Analyses","Leduc", "Output_batch_effect_removal", "imputation_with_prior_batch_effect_removal_results_Leduc.RDS"))
+ df_all <- readRDS(file = here("Analyses","Leduc", "Output_batch_effect_removal", "imputation_with_prior_batch_effect_removal_results_Leduc.RDS"))
+```
+
+```{r}
+
+df_summarised_Leduc <- df_all %>% group_by(MNAR, method, missing_type) %>% summarise(meanMAE = mean(MAE),
+                                                sdMAE = sd(MAE))
+df_summarised_Leduc$missing_type <- factor(df_summarised_Leduc$missing_type,
+                                               levels = c("all", "MAR","MNAR"), 
+                                               labels = c("all","MCAR","MNAR"))
+
+df_summarised_Leduc$method <- factor(df_summarised_Leduc$method, levels = c("SGD","SGD Batch",
+                                              "DAE-NN", "DAE-NN-default", 
+                                              "VAE-NN", "VAE-NN-default",
+                                              "CF-NN", "CF-NN-default",
+                                              "NIPALS", "NIPALS-default",
+                                              "knnmethod", "knnmethod-default",
+                                              "QRILC","zero","minimum"), 
+                                     labels = c("GMF","GMF Batch", 
+                                              "DAE", "DAE Batch", 
+                                              "VAE", "VAE Batch",
+                                              "CF", "CF Batch",
+                                              "NIPALS", "NIPALS Batch",
+                                              "KNN", "KNN Batch", 
+                                              "QRILC Batch","zero Batch","minimum Batch"))
+
+
+```
+```{r}
+library(ggplot2)
+
+myColors <- c("#BC3C29FF",  "#E18727FF", "#E18727FF",
+              "#4269D0FF","#20854EFF", "#A463F2FF",
+              "#97BBF5FF", "#6CC5B0FF", "#7876B1FF",
+              "#9498A0FF","grey",
+              "#9C6B4EFF","#D4A98FFF",
+              "#FFDC91FF", "#FF8AB7FF", "#EE4C97FF",
+              "black")
+names(myColors) <- c("GMF", "GMF Batch", "GMF Treatment", 
+                     "DAE", "VAE", "CF",
+                     "DAE Batch","VAE Batch", "CF Batch",
+                      "NIPALS", "NIPALS Batch",
+                      "KNN", "KNN Batch", "QRILC Batch","zero Batch", "minimum Batch",
+                     "no imputation")
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+Leduc_imputation_plot <- ggplot(df_summarised_Leduc %>% 
+                                  dplyr::filter(method %in% c("GMF","GMF Batch", 
+                                              "DAE", "DAE Batch", "VAE", "VAE Batch", "CF", "CF Batch",
+                                              "NIPALS", "NIPALS Batch","KNN" ,"KNN Batch")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE")
+
+Leduc_imputation_plot_batches <- ggplot(df_summarised_Leduc %>% 
+                                  dplyr::filter(method %in% c("GMF","GMF Batch", 
+                                               "DAE Batch", "VAE Batch", "CF Batch",
+                                             "NIPALS Batch","KNN Batch", "QRILC Batch",
+                                             "zero Batch", "minimum Batch")), 
+       aes(x = method, y = meanMAE, col = method, shape = missing_type)) + 
+  geom_point(size = 2.5) + 
+  geom_errorbar(aes(ymin = meanMAE - sdMAE, ymax = meanMAE + sdMAE))+
+  facet_wrap(~MNAR, scales = "free_y", ncol =5) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), legend.title = element_text(size = 14)) + colScale + labs(shape = "Missing type")  + ylab("MAE")
+
+```
+
+```{r}
+write.xlsx(df_summarised_Leduc %>% as.data.frame(), file=here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_Leduc_batch_corrected", append=TRUE, row.names=FALSE)
+
+```
+
+```{r}
+ggsave(plot = Leduc_imputation_plot, filename = here("Figures/Supplementary_imputation_plot_Leduc_batch_corr_prior_to_imputation.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+ggsave(plot = Leduc_imputation_plot_batches, filename = here("Figures/Supplementary_imputation_plot_Leduc_batch_corr_prior_to_imputation_batches_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+
+```{r}
+library(openxlsx)
+
+excel_supp_fig_21 <- Leduc_imputation_plot$data %>% select(-.group)
+excel_supp_fig_22 <- Leduc_imputation_plot_batches$data %>% select(-.group)
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_21")
+addWorksheet(wb, "Supp_fig_22")
+
+# Write data
+writeData(wb, "Supp_fig_21", excel_supp_fig_8)
+writeData(wb, "Supp_fig_22", excel_supp_fig_8)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+

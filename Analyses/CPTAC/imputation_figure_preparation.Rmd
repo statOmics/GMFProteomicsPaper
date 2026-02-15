@@ -19,10 +19,14 @@ devtools::load_all(here("omicsGMF"))
 ```
 
 ```{r}
+# Function to calculate the mean average error calculation between the original
+# value and its imputed value after it has been put to a missing value.
+
 MAE_calculation <- function(imputed, original){
   mean(abs(imputed-original))
 }
 
+# Function to impute missing values with nipals.
 
 reconstruct_nipals <- function(nipals){
   
@@ -39,27 +43,46 @@ df_all <- data.frame("MNAR" = NULL,
                      "MAE" = NULL,
                      "method" = NULL)
 
+# loop over the simulations with 25, 50, and 75 percent of the introduced missing values 
+# being due to low abundance. This is done for 10 different simulations.
+
 for(i in c("25", "50", "75")){
   for(j in c(1:10)){
+    
+    # Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
   original <- readRDS(file =  here("Data","CPTAC_data", "CPTAC_sce.RDS"))
+  
+  # Read the files that contain the information of the simulation, such as which values
+  # were put to missing due to MCAR and MNAR in the specific simulation. 
   NAs <- readRDS(file  =  here("Data","CPTAC_data", paste0("CPTAC_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  # Rows that have all missing values were removed as in these cases no imputation can be
+  # done
+
   original <- original[rowMeans(is.na(NAs$data)) < 1 ,]
   
+    # Read in the imputation results for the different methods for that specific simulation setting.
+    # GMF model without covariates
   sgd <- readRDS(file = here("Analyses","CPTAC", "Output", 
                              paste0("sgd_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  # GMF model with 2 fixed effects for lab.
   sgd_batch <- readRDS(file = here("Analyses","CPTAC", "Output", 
                                    paste0("sgd_batch_MISTOT10_MNAR", i, "_", j, ".RDS")))
+  
+  # GMF model with 2 fixed effects for lab and 4 fixed effects for condition.
   sgd_batch_condition <- readRDS(file = here("Analyses","CPTAC", "Output", 
                                              paste0("sgd_batch_condition_MISTOT10_MNAR", i, "_", j, ".RDS")))
   
-  
+   # impute the missing values with the GMF models
   sgd_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd))
   sgd_batch_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd_batch))
   sgd_batch_condition_reconstructed <- t(imputeGMF(NAs$data[rowMeans(is.na(NAs$data)) < 1 ,], sgd_batch_condition))
 
   
   
-  
+  # Load the other imputation results.
+
  DAE <- as.matrix(data.table::fread(file = here("Analyses","CPTAC", "Output", 
                               paste0("DAE_MISTOT10_MNAR", i, "_", j,".csv")),
                   header = "auto"), rownames = 1)
@@ -94,13 +117,14 @@ for(i in c("25", "50", "75")){
   minimum <- readRDS(file = here("Analyses","CPTAC", "Output",  
                               paste0("minimum_MISTOT10_MNAR", i, "_", j, ".RDS")))
   
-  
+  # define three classes of results: considering all outliers, considering outliers
+  # that were simulated ad random, and outliers that were simulated due to low abundance
   imputed_all <- t((NAs$MAR + NAs$MNAR)[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
   imputed_MAR <- t(NAs$MAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
   imputed_MNAR <- t(NAs$MNAR[rowMeans(is.na(NAs$data)) < 1 ,] == 1)
 
   
-  # all methods that are included in sapply
+  # combine all imputations
   methods <- list(sgd_reconstructed,
                   sgd_batch_reconstructed,
                   sgd_batch_condition_reconstructed,
@@ -114,6 +138,8 @@ for(i in c("25", "50", "75")){
                      "DAE-default-NN", "CF-default-NN", "VAE-default-NN",
                      "NIPALS", "KNN", "QRILC","zero","minimum")
   
+  # Compute the MAE for all methods.
+
   #MAE calculation
   MAE_all <- sapply(methods, FUN = function(x){
     MAE_calculation(imputed = x[imputed_all], 
@@ -136,7 +162,7 @@ for(i in c("25", "50", "75")){
   })
 
 
-  
+    # Combine results for all simulations
   df_loop <- data.frame(
                      "MNAR" = i,
                      "MAE" = c(MAE_all, 

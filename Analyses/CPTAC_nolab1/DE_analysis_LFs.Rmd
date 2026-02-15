@@ -1,0 +1,556 @@
+---
+title: "CPTAC no lab1"
+output: html_document
+date: '2024-07-31'
+---
+
+```{r}
+library(here)
+library(msqrob2)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(BiocParallel)
+
+devtools::load_all(here("omicsGMF"))
+
+```
+
+```{r}
+register(BPPARAM = MulticoreParam(workers = 1))
+```
+
+```{r}
+sce <- readRDS(here("Data/CPTAC_nolab1/CPTAC_sce.RDS"))
+
+sgd_1 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_1LF.RDS"))
+sgd_2 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_2LF.RDS"))
+sgd_3 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_3LF.RDS"))
+sgd_4 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce.RDS"))
+sgd_5 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_5LF.RDS"))
+sgd_6 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_6LF.RDS"))
+sgd_7 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_7LF.RDS"))
+sgd_8 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_8LF.RDS"))
+sgd_9 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_9LF.RDS"))
+sgd_10 <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce_10LF.RDS"))
+
+```
+
+```{r}
+cond <- which(
+  strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
+
+colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
+  unlist %>%  
+  as.factor
+
+colData(sce)$lab <- rep(rep(paste0("lab",2:3),each=3),5) %>% as.factor
+
+colData(sce)$samples <- as.factor(rownames(colData(sce)))
+
+
+```
+
+```{r}
+
+sce_sgd_1 <- sce
+assay(sce_sgd_1) <- imputeGMF(assay(sce_sgd_1), sgd_1)
+rowData(sce_sgd_1) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_2 <- sce
+assay(sce_sgd_2) <- imputeGMF(assay(sce_sgd_2), sgd_2)
+rowData(sce_sgd_2) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_3 <- sce
+assay(sce_sgd_3) <- imputeGMF(assay(sce_sgd_3), sgd_3)
+rowData(sce_sgd_3) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_4 <- sce
+assay(sce_sgd_4) <- imputeGMF(assay(sce_sgd_4), sgd_4)
+rowData(sce_sgd_4) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_5 <- sce
+assay(sce_sgd_5) <- imputeGMF(assay(sce_sgd_5), sgd_5)
+rowData(sce_sgd_5) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_6 <- sce
+assay(sce_sgd_6) <- imputeGMF(assay(sce_sgd_6), sgd_6)
+rowData(sce_sgd_6) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_7 <- sce
+assay(sce_sgd_7) <- imputeGMF(assay(sce_sgd_7), sgd_7)
+rowData(sce_sgd_7) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_8 <- sce
+assay(sce_sgd_8) <- imputeGMF(assay(sce_sgd_8), sgd_8)
+rowData(sce_sgd_8) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_9 <- sce
+assay(sce_sgd_9) <- imputeGMF(assay(sce_sgd_9), sgd_9)
+rowData(sce_sgd_9) <- rowData(sce)[,c("Proteins","Sequence")]
+
+sce_sgd_10 <- sce
+assay(sce_sgd_10) <- imputeGMF(assay(sce_sgd_10), sgd_10)
+rowData(sce_sgd_10) <- rowData(sce)[,c("Proteins","Sequence")]
+
+```
+
+
+```{r}
+library(QFeatures)
+qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
+
+qf_sce_1 <- QFeatures(list("peptide" = sce_sgd_1), colData = colData(sce))
+qf_sce_2 <- QFeatures(list("peptide" = sce_sgd_2), colData = colData(sce))
+qf_sce_3 <- QFeatures(list("peptide" = sce_sgd_3), colData = colData(sce))
+qf_sce_4 <- QFeatures(list("peptide" = sce_sgd_4), colData = colData(sce))
+qf_sce_5 <- QFeatures(list("peptide" = sce_sgd_5), colData = colData(sce))
+qf_sce_6 <- QFeatures(list("peptide" = sce_sgd_6), colData = colData(sce))
+qf_sce_7 <- QFeatures(list("peptide" = sce_sgd_7), colData = colData(sce))
+qf_sce_8 <- QFeatures(list("peptide" = sce_sgd_8), colData = colData(sce))
+qf_sce_9 <- QFeatures(list("peptide" = sce_sgd_9), colData = colData(sce))
+qf_sce_10 <- QFeatures(list("peptide" = sce_sgd_10), colData = colData(sce))
+
+```
+
+
+
+```{r}
+
+
+pe_sce_1 <- msqrobAggregate(qf_sce_1, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_2 <- msqrobAggregate(qf_sce_2, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_3 <- msqrobAggregate(qf_sce_3, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_4 <- msqrobAggregate(qf_sce_4, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_5 <- msqrobAggregate(qf_sce_5, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_6 <- msqrobAggregate(qf_sce_6, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_7 <- msqrobAggregate(qf_sce_7, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_8 <- msqrobAggregate(qf_sce_8, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_9 <- msqrobAggregate(qf_sce_9, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+pe_sce_10 <- msqrobAggregate(qf_sce_10, i = "peptide", fcol = "Proteins",
+     formula = ~condition + lab + (1|samples) + (1|Sequence),
+     ridge = TRUE)
+
+
+```
+
+
+```{r}
+comparisonsRef <- paste0(paste0("ridgecondition", c("B","C","D","E")), " = 0")
+comparisonsRef
+
+comparisonsOther <- paste0(
+    apply(
+          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - ")
+          , " = 0")
+comparisonsOther
+
+comparisons <- c(comparisonsRef, comparisonsOther)
+comparisons
+```
+```{r}
+L <- makeContrast(comparisons, parameterNames = paste0("ridgecondition", c("B","C","D","E")))
+L
+
+```
+
+```{r}
+#pe_original <- hypothesisTest(object = pe_original, i = "msqrobAggregate", contrast = L)
+
+pe_sgd_1 <- hypothesisTest(object = pe_sce_1, i = "msqrobAggregate", contrast = L)
+pe_sgd_2 <- hypothesisTest(object = pe_sce_2, i = "msqrobAggregate", contrast = L)
+pe_sgd_3 <- hypothesisTest(object = pe_sce_3, i = "msqrobAggregate", contrast = L)
+pe_sgd_4 <- hypothesisTest(object = pe_sce_4, i = "msqrobAggregate", contrast = L)
+pe_sgd_5 <- hypothesisTest(object = pe_sce_5, i = "msqrobAggregate", contrast = L)
+pe_sgd_6 <- hypothesisTest(object = pe_sce_6, i = "msqrobAggregate", contrast = L)
+pe_sgd_7 <- hypothesisTest(object = pe_sce_7, i = "msqrobAggregate", contrast = L)
+pe_sgd_8 <- hypothesisTest(object = pe_sce_8, i = "msqrobAggregate", contrast = L)
+pe_sgd_9 <- hypothesisTest(object = pe_sce_9, i = "msqrobAggregate", contrast = L)
+pe_sgd_10 <- hypothesisTest(object = pe_sce_10, i = "msqrobAggregate", contrast = L)
+
+```
+
+
+
+```{r}
+#rowData(pe_original[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
+
+rowData(pe_sgd_1[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_2[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_3[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_4[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_5[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_6[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_7[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_8[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_9[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+rowData(pe_sgd_10[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce_1[["msqrobAggregate"]]))
+
+```
+
+```{r}
+
+myColors <- c("#4D4D4D", "#6C6C6C", "#838383","black",
+  "#969696", "#A7A7A7", "#B5B5B5", "#C3C3C3",
+  "#CFCFCF", "#DBDBDB", "#E6E6E6")
+names(myColors) <- c(paste0("GMF_",c(1:3)), "GMF", paste0("GMF_", c(5:10)))
+colScale <- scale_colour_manual(name = "Method",values = myColors)
+
+```
+
+```{r}
+tprFdp <- function(pval, tp, adjPval) {
+    ord <- order(pval)
+    return(data.frame(
+        pval = pval[ord],
+        adjPval = adjPval[ord],
+        tpr = cumsum(tp[ord]) / sum(tp),
+        fdp = cumsum(!tp[ord]) / 1:length(tp)
+    ))
+}
+
+```
+
+```{r}
+tprFdpPlots <- list()
+
+comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
+          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
+          2,
+          paste,
+          collapse = " - "))
+plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33))
+plot_titles[1:4] <- paste0(plot_titles[1:4], "A")
+for (i in comparisons_loop)
+{
+
+tprFdpSGD_1 <- tprFdp(
+    rowData(pe_sgd_1[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_1[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_1[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_2 <- tprFdp(
+    rowData(pe_sgd_2[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_2[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_2[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_3 <- tprFdp(
+    rowData(pe_sgd_3[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_3[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_3[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_4 <- tprFdp(
+    rowData(pe_sgd_4[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_4[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_4[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_5 <- tprFdp(
+    rowData(pe_sgd_5[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_5[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_5[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_6 <- tprFdp(
+    rowData(pe_sgd_6[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_6[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_6[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_7 <- tprFdp(
+    rowData(pe_sgd_7[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_7[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_7[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+tprFdpSGD_8 <- tprFdp(
+    rowData(pe_sgd_8[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_8[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_8[["msqrobAggregate"]])[[i]]$adjPval
+)
+tprFdpSGD_9 <- tprFdp(
+    rowData(pe_sgd_9[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_9[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_9[["msqrobAggregate"]])[[i]]$adjPval
+)
+tprFdpSGD_10 <- tprFdp(
+    rowData(pe_sgd_10[["msqrobAggregate"]])[[i]]$pval,
+    rowData(pe_sgd_10[["msqrobAggregate"]])$ups,
+    rowData(pe_sgd_10[["msqrobAggregate"]])[[i]]$adjPval
+)
+
+
+
+hlp <- rbind(
+    cbind(tprFdpSGD_1, method = "GMF_1"),
+    cbind(tprFdpSGD_2, method = "GMF_2"),
+    cbind(tprFdpSGD_3, method = "GMF_3"),
+    cbind(tprFdpSGD_4, method = "GMF"),
+    cbind(tprFdpSGD_5, method = "GMF_5"),
+    cbind(tprFdpSGD_6, method = "GMF_6"),
+    cbind(tprFdpSGD_7, method = "GMF_7"),
+    cbind(tprFdpSGD_8, method = "GMF_8"),
+    cbind(tprFdpSGD_9, method = "GMF_9"),
+    cbind(tprFdpSGD_10, method = "GMF_10")
+)
+    hlp$method <- factor(hlp$method, 
+                         levels = c(paste0("GMF_",c(1:3)), "GMF", paste0("GMF_", c(5:10))))
+    select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    select[select == 0] <- 1
+# tprFdpPlots[[i]] <- hlp %>%
+#     ggplot(aes(x = fdp, y = tpr, color = method)) +
+#      geom_vline(xintercept = 0.01, lty = 2) +
+#     geom_path(aes(x = fdp, y = tpr, color = method))+ 
+#     geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
+#                aes(x = fdp, y = tpr, color = method), cex = 4)  + theme_bw() + colScale
+
+tprFdpPlots[[i]] <- hlp %>% 
+    ggplot(aes(x = fdp, y = tpr, color = method)) +
+    geom_path() + 
+    geom_point(data = hlp[c(select$select + nrow(tprFdpSGD_1)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                aes(x = fdp, y = tpr, color = method), cex = 2) +
+    theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
+    xlab("FDP") + ylab("TPR") + theme(legend.position = "none", axis.title = element_text(size = 7), axis.text = element_text(size = 6), 
+                                      plot.title = element_text(size=10))
+
+
+
+}
+
+legend <- (hlp %>% 
+                               ggplot(aes(x = fdp, y = tpr, color = method)) +
+                               geom_path() + 
+                               geom_point(data = hlp[c(select$select + nrow(tprFdpSGD_1)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                                          aes(x = fdp, y = tpr, color = method), cex = 2) +
+                               theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
+                               xlab("FDP") + ylab("TPR") + 
+                               theme(legend.position = "bottom", 
+                                     legend.title = element_text(size = 7),
+                                     legend.text = element_text(size = 6),
+                                     legend.justification = "left", 
+                                     legend.box.margin =  margin(l = 1, r = -2, unit = "cm"))
++
+  guides(color = guide_legend(nrow = 5)))
+
+legend_right <- (hlp %>% 
+                                       ggplot(aes(x = fdp, y = tpr, color = method)) +
+                                       geom_path() + 
+                                       geom_point(data = hlp[c(select$select + nrow(tprFdpSGD_1)*c(0:(length(unique(hlp$method))-1)))  , ], 
+                                                  aes(x = fdp, y = tpr, color = method), cex = 2) +
+                                       theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
+                                       xlab("FDP") + ylab("TPR") + 
+                                       theme(legend.position = "right", legend.title = element_text(size = 7), 
+                                             legend.text = element_text(size = 6), legend.justification = "left", 
+                                           legend.box.margin =  margin(r = -1, unit = "cm")))
+
+tprFdpPlots
+
+```
+
+
+
+
+```{r}
+
+y_intercepts <- data.frame(yintercept = c(log2(c(
+    c(0.74, 2.22, 6.67, 20) / c(0.25), 
+    c(2.22, 6.67, 20) / c(0.74), 
+    c(6.67, 20) / c(2.22),
+    20/6.67)), rep(0, 10)),
+    "ups" = rep(c("Human spike-in", "Yeast"), each = 10))
+
+
+logFC_plots <- list()
+for (i in comparisons_loop)
+{
+
+    
+    logFC <- data.frame(
+        GMF_1 = rowData(pe_sgd_1[["msqrobAggregate"]])[[i]][, 1],
+        GMF_2 = rowData(pe_sgd_2[["msqrobAggregate"]])[[i]][, 1],
+        GMF_3 = rowData(pe_sgd_3[["msqrobAggregate"]])[[i]][, 1],
+        GMF = rowData(pe_sgd_4[["msqrobAggregate"]])[[i]][, 1],
+        GMF_5 = rowData(pe_sgd_5[["msqrobAggregate"]])[[i]][, 1],
+        GMF_6 = rowData(pe_sgd_6[["msqrobAggregate"]])[[i]][, 1],
+        GMF_7 = rowData(pe_sgd_7[["msqrobAggregate"]])[[i]][, 1],
+        GMF_8 = rowData(pe_sgd_8[["msqrobAggregate"]])[[i]][, 1],
+        GMF_9 = rowData(pe_sgd_9[["msqrobAggregate"]])[[i]][, 1],
+        GMF_10 = rowData(pe_sgd_10[["msqrobAggregate"]])[[i]][, 1],
+    ups = rowData(pe_sgd_4[["msqrobAggregate"]])$ups)
+    
+    logFC <- logFC %>% gather(method, log2FC, c(paste0("GMF_",c(1:3)), "GMF", paste0("GMF_", c(5:10))))
+    logFC$ups <- factor(logFC$ups, labels = c("Yeast", "Human spike-in"))
+    logFC$method <- factor(logFC$method, levels = c(paste0("GMF_",c(1:3)), "GMF", paste0("GMF_", c(5:10))),
+                       labels = c(paste0("GMF_",c(1:3)), "GMF", paste0("GMF_", c(5:10))))
+
+logFC_plots[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30",
+               linetype = "solid", alpha =0.5) + 
+    ggtitle(plot_titles[comparisons_loop == i]) + 
+    theme_bw() + 
+    theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank(),
+          axis.title.y = element_text(size = 7), axis.text = element_text(size = 6), plot.title = element_text(size=10),
+          strip.text.x = element_text(size = 6))  +    
+    scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+   colScale
+
+
+
+}
+legend_lfc <- (logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30") + 
+    ggtitle(plot_titles[comparisons_loop == i]) + 
+    theme_bw() + 
+    theme(legend.position = "bottom", legend.title = element_text(size = 7), 
+                                             legend.text = element_text(size = 6), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = 1.5, r = -2, unit = "cm")) +    
+scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+  colScale+
+  guides(color = guide_legend(nrow = 5)))
+
+
+legend_lfc_right <- (logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
+    geom_boxplot() +
+    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30") + 
+    ggtitle(plot_titles[comparisons_loop == i]) + 
+    theme_bw() + 
+    theme(legend.position = "right", legend.title = element_text(size = 7), 
+                                             legend.text = element_text(size = 6), legend.justification = "left", 
+                                           legend.box.margin =  margin(l = -1, unit = "cm")) +    
+    scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
+    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
+  facet_wrap(~ups)  +
+  colScale) 
+
+
+```
+
+
+```{r}
+
+full_plot_tprfdp_main <- 
+    ggarrange(ggarrange(tprFdpPlots[[1]],tprFdpPlots[[2]], 
+              tprFdpPlots[[5]],
+              logFC_plots[[1]],logFC_plots[[2]], 
+              logFC_plots[[5]],
+              ncol = 3,
+              nrow = 2,
+              labels = list("A", "", "", "B", "", ""),
+              widths = c(0.85/3, 0.85/3, 0.85/3)), 
+              ggpubr::as_ggplot(ggpubr::get_legend(legend_right)),
+              widths = c(0.85, 0.15), align = "hv")
+
+
+full_plot_tprfdp_main
+
+
+
+
+ggsave(filename = here("Figures/Supplementary_LF_tprfdp_main.pdf"), 
+       plot = full_plot_tprfdp_main, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215/2)
+
+
+
+
+full_plot_tprfdp <- as_ggplot((gridExtra::grid.arrange(grobs = append(tprFdpPlots,
+                                    list(ggpubr::as_ggplot(ggpubr::get_legend(legend)))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))))
+
+
+
+
+ggsave(filename = here("Figures/Supplementary_full_plot_tprfdp_LFs.pdf"), 
+       plot = full_plot_tprfdp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+
+full_plot_lfc <- as_ggplot(gridExtra::grid.arrange(grobs = append(logFC_plots,
+                                    list(ggpubr::as_ggplot(ggpubr::get_legend(legend_lfc)))),
+                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11))))
+full_plot_lfc
+
+ggsave(filename = here("Figures/Supplementary_full_plot_lfc_LFs.pdf"), plot = full_plot_lfc, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
+excel_supp_fig_35 <- bind_rows(
+  lapply(names(tprFdpPlots), function(n) {
+    df <- tprFdpPlots[[i]]$data[ , c("tpr", "fdp", "method")] %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+
+excel_supp_fig_36 <- bind_rows(
+  lapply(names(logFC_plots), function(n) {
+    df <- logFC_plots[[i]]$data %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+
+wb <- loadWorkbook(file_path)
+
+addWorksheet(wb, "Supp_fig_35")
+
+# Write data
+writeData(wb, "Supp_fig_35", excel_supp_fig_35)
+
+addWorksheet(wb, "Supp_fig_36")
+
+# Write data
+writeData(wb, "Supp_fig_36", excel_supp_fig_36)
+
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+
+
+```
+

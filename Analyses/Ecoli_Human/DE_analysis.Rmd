@@ -196,7 +196,9 @@ return(data.frame(
   pval = pval[ord],
   adjPval = adjPval[ord],
   tpr = cumsum(tp[ord])/sum(tp),
-  fdp = cumsum(!tp[ord])/1:length(tp)))
+  fdp = cumsum(!tp[ord])/1:length(tp),
+  tp = cumsum(tp[ord]),
+  fp = cumsum(!tp[ord])))
 }
 ```
 
@@ -211,6 +213,7 @@ names(myColors) <- c("GMF",
                       "KNN", "QRILC","zero",
                      "no imputation")
 colScale <- scale_colour_manual(name = "Method",values = myColors)
+colScale_fill <- scale_fill_manual(name = "Method",values = myColors)
 
 ```
 
@@ -236,6 +239,19 @@ tprFdpPlots <- list()
 
 plot_titles <- paste0(substr(contrastNames,15, stop = 15), " versus ", substr(contrastNames, 33, 33))
 plot_titles[1:4] <- paste0(plot_titles[1:4], "1")
+
+tp_table <- matrix(0, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+fp_table <- matrix(0, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+
+
+results_fdp1 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp5 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp10 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
 
 
 for (i in contrastNames)
@@ -284,6 +300,35 @@ hlp <- rbind(
     cbind(tprFdporiginal, method = "no imputation")
 )
     hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
+    
+    tp_vector <- hlp %>%
+      group_by(method) %>%
+      filter(fdp < 0.05) %>%
+      slice_tail(n = 1) %>%  # get the last valid row per method
+      select(method, tp) %>% 
+        { setNames(.$tp, .$method) }
+      
+      fp_vector <- hlp %>%
+      group_by(method) %>%
+      filter(fdp < 0.05) %>%
+      slice_tail(n = 1) %>%  # get the last valid row per method
+      select(method, fp) %>% 
+        { setNames(.$fp, .$method) }
+    
+    tp_table[plot_titles[contrastNames == i], names(tp_vector)] <- tp_vector
+    fp_table[plot_titles[contrastNames == i], names(fp_vector)] <- fp_vector
+    
+    fdr1 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.01, na.rm = T))
+    fdr5 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    fdr10 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.10, na.rm = T))
+    fdr1[fdr1 == 0] <- 1
+    fdr5[fdr5 == 0] <- 1
+    fdr10[fdr10 == 0] <- 1
+    results_fdp1[plot_titles[contrastNames == i], ] <- hlp[c(fdr1$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp5[plot_titles[contrastNames == i], ] <- hlp[c(fdr5$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp10[plot_titles[contrastNames == i], ] <- hlp[c(fdr10$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    
+    
     select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
     select[select == 0] <- 1
     
@@ -400,6 +445,52 @@ logFC_plots
 ```
 
 ```{r}
+write.xlsx(results_fdp1, file= here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_Ecoli_fdp_0.01", append=TRUE, row.names=TRUE)
+write.xlsx(results_fdp5, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_Ecoli_fdp_0.05", append=TRUE, row.names=TRUE)
+write.xlsx(results_fdp10, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_Ecoli_fdp_0.10", append=TRUE, row.names=TRUE)
+
+
+write.xlsx(tp_table, file= here("Figures/Supplementary_Data_TP.xlsx"), 
+           sheetName="DE_Ecoli_fdp_0.05", append = TRUE, row.names=TRUE)
+write.xlsx(fp_table, file= here("Figures/Supplementary_Data_FP.xlsx"), 
+           sheetName="DE_Ecoli_fdp_0.05", append = TRUE, row.names=TRUE)
+```
+
+```{r}
+df_tp_fp <- 
+  rbind(
+      tp_table %>% as.data.frame() %>% rownames_to_column(var = "Comparison") %>% 
+        pivot_longer(cols = -Comparison, names_to = c("Method"), values_to = "Number") %>% 
+        mutate("Evaluation" = "True positives"), 
+      fp_table %>% as.data.frame() %>% rownames_to_column(var = "Comparison") %>% 
+        pivot_longer(cols = -Comparison, names_to = "Method", values_to = "Number") %>% 
+        mutate("Evaluation" = "False positives"))
+df_tp_fp$Method <- factor(df_tp_fp$Method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
+df_tp_fp$Evaluation <- factor(df_tp_fp$Evaluation, 
+                              levels = c("True positives", "False positives"))
+
+
+plot_tp_fp <- ggplot(data = df_tp_fp,
+      aes(x = Evaluation, y = Number, fill = Method)) + 
+  geom_bar(stat = "identity",  width = 0.4,
+           position=position_dodge(width = 0.5)) + 
+  facet_wrap(~Comparison) + 
+  theme_bw() + 
+  colScale_fill + 
+  theme(axis.text = element_text(size = 8, angle = 90), 
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank())
+
+ggsave(filename = here("Figures/plot_TP_FP_ecoli.pdf"), plot = plot_tp_fp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
 full_plot_lfc <- gridExtra::grid.arrange(grobs = append(logFC_plots,
                                     list(ggpubr::as_ggplot(legend_lfc))),
                         layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
@@ -411,6 +502,59 @@ ggsave(filename = here("Analyses/Ecoli_Human/Output/full_plot_lfc_ecoli.pdf"), p
 ggsave(filename = here("Figures/full_plot_lfc_ecoli.pdf"), plot = full_plot_lfc,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
 ```
+
+```{r}
+library(openxlsx)
+
+excel_supp_fig_41 <- bind_rows(
+  lapply(names(tprFdpPlots), function(n) {
+    df <- tprFdpPlots[[i]]$data[ , c("tpr", "fdp", "method")] %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+excel_supp_fig_42 <- bind_rows(
+  lapply(names(logFC_plots), function(n) {
+    df <- logFC_plots[[i]]$data %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
+
+
+excel_supp_fig_43 <- df_tp_fp
+
+
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_Fig_41")
+
+# Write data
+writeData(wb, "Supp_Fig_41", excel_supp_fig_41)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_Fig_42")
+
+# Write data
+writeData(wb, "Supp_Fig_42", excel_supp_fig_42)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_Fig_43")
+
+# Write data
+writeData(wb, "Supp_Fig_43", excel_supp_fig_43)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+
 
 # Distributions
 
@@ -581,3 +725,27 @@ ggsave(filename = here("Figures/distribution_plot_human_peptides.pdf"), plot = p
 ggsave(filename = here("Figures/merged_distribution_plot_ecoli.pdf"), plot = merged_distributionplot,  device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
 ```
+
+
+```{r}
+
+excel_supp_fig_44 <- rbind(p1$data %>% 
+                             select(-c(".group")) %>% 
+                             mutate(data = "Ecoli"),
+                           p2$data %>% 
+                             select(-c(".group")) %>% 
+                             mutate(data = "Human"))
+
+
+  
+  
+addWorksheet(wb, "Supp_Fig_44")
+
+# Write data
+writeData(wb, "Supp_Fig_44", excel_supp_fig_44)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+
+```
+

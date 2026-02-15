@@ -1,0 +1,100 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(here)
+```
+
+```{r}
+sample_size <- c(100, 1000, 10000, 100000)
+feature_size <- c(100, 1000, 10000, 100000)
+dimensions <- c(5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+```
+
+```{r}
+fixed_sample <- 1000
+fixed_feature <- 5000
+```
+
+
+```{r}
+sce <- readRDS(file = here("Data/leduc2022_pSCoPE_data/leduc_sce.RDS"))
+```
+
+
+```{r}
+dim(sce)
+```
+
+
+```{r}
+set.seed(100)
+features <- sample(x = rownames(sce), size = fixed_feature, replace = TRUE)
+
+for(i in 1:length(sample_size)){
+  samples <- sample(x = colnames(sce), size = sample_size[i], replace = TRUE)
+  values <- assays(sce)$logintensities[features, samples] + 
+    rnorm(n = fixed_feature*sample_size[i], mean = 0, sd = 1)
+  saveRDS(object = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", fixed_feature, 
+                      "_features_", sample_size[i], "_samples.RDS")))
+    write.csv(x = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", fixed_feature, 
+                      "_features_", sample_size[i], "_samples.csv")))
+
+}
+```
+
+
+
+```{r}
+set.seed(100)
+samples <- sample(x = colnames(sce), size = fixed_sample, replace = TRUE)
+
+for(i in 1:length(sample_size)){
+  features <- sample(x = rownames(sce), size = feature_size[i], replace = TRUE)
+  values <- assays(sce)$logintensities[features, samples] + 
+    rnorm(n = feature_size[i]*fixed_sample, mean = 0, sd = 1)
+  saveRDS(object = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", feature_size[i], 
+                      "_features_", fixed_sample, "_samples.RDS")))
+  
+  write.csv(x = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", feature_size[i], 
+                      "_features_", fixed_sample, "_samples.csv")))
+  
+
+}
+```
+
+
+```{r}
+set.seed(100)
+
+for(i in 1){
+  samples <- sample(x = colnames(sce), size = fixed_sample, replace = TRUE)
+  features <- sample(x = rownames(sce), size = fixed_feature, replace = TRUE)
+
+  values <- assays(sce)$logintensities[features, samples] + 
+    rnorm(n = fixed_feature*fixed_sample, mean = 0, sd = 1)
+  
+  saveRDS(object = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", fixed_feature, 
+                      "_features_", fixed_sample, "_samples.RDS")))
+  
+  write.csv(x = values, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", fixed_feature, 
+                      "_features_", fixed_sample, "_samples.csv")))
+  
+
+}
+```
+

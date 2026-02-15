@@ -12,7 +12,7 @@ library(ggplot2)
 library(tidyverse)
 library(ggpubr)
 library(BiocParallel)
-
+library(QFeatures)
 devtools::load_all(here("omicsGMF"))
 
 ```
@@ -21,9 +21,14 @@ devtools::load_all(here("omicsGMF"))
 register(BPPARAM = MulticoreParam(workers = 1))
 ```
 
+# Loading the data
+
 ```{r}
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_nolab1/CPTAC_nolab1_data_preparation.Rmd. lab1 is excluded in this script.
+
 sce <- readRDS(here("Data/CPTAC_nolab1/CPTAC_sce.RDS"))
 
+# Read the imputed intensity matrices for the different imputation methods.
 
 sgd <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_sce.RDS"))
 sgd_batch <- readRDS(here("Analyses/CPTAC_nolab1/Output/sgd_batch_sce.RDS"))
@@ -42,13 +47,19 @@ knn <- readRDS(file = here("Analyses/CPTAC_nolab1/Output/knnmethod_sce.RDS"))
 
 ```
 
+# Preprocessing to get the right format
+
 ```{r}
+# Define the condition and labs in colData to include as a known covariate in the msqrob2 analysis.
+
 cond <- which(
   strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
 
 colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
   unlist %>%  
   as.factor
+
+# In this script 1 fixed effects are included, one for lab3. lab1 is excluded from this script. 
 
 colData(sce)$lab <- rep(rep(paste0("lab",2:3),each=3),5) %>% as.factor
 
@@ -58,6 +69,7 @@ colData(sce)$samples <- as.factor(rownames(colData(sce)))
 ```
 
 ```{r}
+# Impute according to the GMF model.
 
 sce_sgd <- sce
 assay(sce_sgd) <- imputeGMF(assay(sce_sgd), sgd)
@@ -76,6 +88,8 @@ rowData(sce_sgd_batch_condition) <- rowData(sce)[,c("Proteins","Sequence")]
 ```
 
 ```{r}
+# Define the different summarized experiments.
+
 sce_DAE <- sce
 assay(sce_DAE) <- t(DAE)
 rowData(sce_DAE) <- rowData(sce)[,c("Proteins","Sequence")]
@@ -98,12 +112,19 @@ rowData(sce_knn) <- rowData(sce)[,c("Proteins","Sequence")]
 
 
 ```{r}
-library(QFeatures)
+# Define the different QFeatures objects for the msqrob2 analysis.
+
+# without imputed values
+
 qf_original <- QFeatures(list("peptide" = sce), colData = colData(sce))
+
+# imputed values according to the GMF model
 
 qf_sce <- QFeatures(list("peptide" = sce_sgd), colData = colData(sce))
 qf_sgd_batch <- QFeatures(list("peptide" = sce_sgd_batch), colData = colData(sce))
 qf_sgd_batch_condition <- QFeatures(list("peptide" = sce_sgd_batch_condition), colData = colData(sce))
+
+# imputed values according to the other models
 
 qf_DAE <- QFeatures(list("peptide" = sce_DAE), colData = colData(sce))
 qf_VAE <- QFeatures(list("peptide" = sce_VAE), colData = colData(sce))
@@ -115,11 +136,19 @@ qf_knn <- QFeatures(list("peptide" = sce_knn), colData = colData(sce))
 
 
 ```{r}
+# msqrob2 analysis to search for different abundant proteins. The model uses
+# peptide intensities, but performs inference on the protein level. Here, we include
+# a lab effect to control for this variation, as well as a random effect for both sample
+# as protein to allow for inference on the protein level. Note that in this script
+# 1 fixed effects for lab3 was used.
+
+# Analysis without imputed values
 
 pe_original <- msqrobAggregate(qf_original, i = "peptide", fcol = "Proteins",
      formula = ~condition + lab + (1|samples) + (1|Sequence),
      ridge = TRUE)
 
+# Analyses for the different imputation strategies
 
 pe_sce <- msqrobAggregate(qf_sce, i = "peptide", fcol = "Proteins",
      formula = ~condition + lab + (1|samples) + (1|Sequence),
@@ -160,6 +189,8 @@ pe_knn <-  msqrobAggregate(qf_knn, i = "peptide", fcol = "Proteins",
 
 
 ```{r}
+# Define the different pairwise conditions that are compared. 
+
 comparisonsRef <- paste0(paste0("ridgecondition", c("B","C","D","E")), " = 0")
 comparisonsRef
 
@@ -182,6 +213,8 @@ L
 ```
 
 ```{r}
+# Inference on protein level between the pairwise different conditions. 
+
 pe_original <- hypothesisTest(object = pe_original, i = "msqrobAggregate", contrast = L)
 
 pe_sgd <- hypothesisTest(object = pe_sce, i = "msqrobAggregate", contrast = L)
@@ -199,6 +232,8 @@ pe_knn <- hypothesisTest(object = pe_knn, i = "msqrobAggregate", contrast = L)
 
 
 ```{r}
+# Define the known differentially abundant proteins.
+
 rowData(pe_original[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
 
 rowData(pe_sgd[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqrobAggregate"]]))
@@ -216,6 +251,8 @@ rowData(pe_knn[["msqrobAggregate"]])$ups <- grepl("UPS", rownames(pe_sce[["msqro
 ```
 
 ```{r}
+# Define the colours for the visualizations.
+
 myColors <- c("#BC3C29FF", 
                "#E18727FF",
               "#EFB118FF",
@@ -226,23 +263,31 @@ names(myColors) <- c("GMF",
                       "KNN", "QRILC","zero",
                      "no imputation")
 colScale <- scale_colour_manual(name = "Method",values = myColors)
+colScale_fill <- scale_fill_manual(name = "Method",values = myColors)
 
 ```
 
 ```{r}
+# Compute the TPR-FDP curves for each method based on the p-values that are returned
+# by the msqrob2 analysis. The true positives are given by the UPS proteins. 
+
 tprFdp <- function(pval, tp, adjPval) {
     ord <- order(pval)
     return(data.frame(
         pval = pval[ord],
         adjPval = adjPval[ord],
         tpr = cumsum(tp[ord]) / sum(tp),
-        fdp = cumsum(!tp[ord]) / 1:length(tp)
+        fdp = cumsum(!tp[ord]) / 1:length(tp),
+        tp = cumsum(tp[ord]),
+        fp = cumsum(!tp[ord])
     ))
 }
 
 ```
 
 ```{r}
+# Loop over the different pairwise comparisons to make the TPR-FDP plots.
+
 tprFdpPlots <- list()
 
 comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
@@ -251,9 +296,26 @@ comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
           paste,
           collapse = " - "))
 plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33))
+
 plot_titles[1:4] <- paste0(plot_titles[1:4], "A")
+
+tp_table <- matrix(0, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+fp_table <- matrix(0, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+
+
+results_fdp1 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp5 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+results_fdp10 <- matrix(NA, nrow = length(plot_titles), ncol = 6, 
+                       dimnames = list(plot_titles, c("GMF","DAE","VAE","CF","KNN", "no imputation")))
+
 for (i in comparisons_loop)
 {
+      # define the TPR-FDP curve for each method and for comparison i
+
 tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval,
              rowData(pe_original[["msqrobAggregate"]])$ups,
              rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval)
@@ -288,6 +350,7 @@ tprFdpknn <- tprFdp(
     rowData(pe_knn[["msqrobAggregate"]])$ups,
     rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval
 )
+  # merge all results
 
 hlp <- rbind(
     cbind(tprFdpSGD, method = "GMF"),
@@ -298,6 +361,42 @@ hlp <- rbind(
     cbind(tprFdporiginal, method = "no imputation")
 )
     hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
+        # Define the FDP-control when using adjusted p-values of 0.05.
+    
+    
+    library(dplyr)
+
+    
+    
+      tp_vector <- hlp %>%
+      group_by(method) %>%
+      filter(fdp < 0.05) %>%
+      slice_tail(n = 1) %>%  # get the last valid row per method
+      select(method, tp) %>% 
+        { setNames(.$tp, .$method) }
+      
+      fp_vector <- hlp %>%
+      group_by(method) %>%
+      filter(fdp < 0.05) %>%
+      slice_tail(n = 1) %>%  # get the last valid row per method
+      select(method, fp) %>% 
+        { setNames(.$fp, .$method) }
+    
+    tp_table[plot_titles[comparisons_loop == i], names(tp_vector)] <- tp_vector
+    fp_table[plot_titles[comparisons_loop == i], names(fp_vector)] <- fp_vector
+
+    
+    fdr1 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.01, na.rm = T))
+    fdr5 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
+    fdr10 <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.10, na.rm = T))
+    fdr1[fdr1 == 0] <- 1
+    fdr5[fdr5 == 0] <- 1
+    fdr10[fdr10 == 0] <- 1
+    results_fdp1[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr1$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp5[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr5$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    results_fdp10[plot_titles[comparisons_loop == i], ] <- hlp[c(fdr10$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , "fdp"]
+    
+    
     select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
     select[select == 0] <- 1
 # tprFdpPlots[[i]] <- hlp %>%
@@ -306,6 +405,8 @@ hlp <- rbind(
 #     geom_path(aes(x = fdp, y = tpr, color = method))+ 
 #     geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
 #                aes(x = fdp, y = tpr, color = method), cex = 4)  + theme_bw() + colScale
+
+            # Make the TPR-FDP plots for comparison i
 
 tprFdpPlots[[i]] <- hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no imputation")) %>% 
     ggplot(aes(x = fdp, y = tpr, color = method)) +
@@ -351,6 +452,23 @@ tprFdpPlots
 ```
 
 
+```{r}
+write.xlsx(results_fdp1, file= here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_2labs_fdp_0.01", append=TRUE, row.names=TRUE)
+write.xlsx(results_fdp5, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_2labs_fdp_0.05", append=TRUE, row.names=TRUE)
+write.xlsx(results_fdp10, 
+           file=here("Figures/Supplementary_Data_FDP_control.xlsx"), 
+           sheetName="DE_2labs_fdp_0.10", append=TRUE, row.names=TRUE)
+
+
+write.xlsx(tp_table, file= here("Figures/Supplementary_Data_TP.xlsx"), 
+           sheetName="DE_2labs_fdp_0.05", row.names=TRUE)
+write.xlsx(fp_table, file= here("Figures/Supplementary_Data_FP.xlsx"), 
+           sheetName="DE_2labs_fdp_0.05", row.names=TRUE)
+
+```
 
 
 ```{r}
@@ -494,170 +612,301 @@ ggsave(filename = here("Figures/full_plot_lfc.pdf"), plot = full_plot_lfc, devic
 
 ```
 
-
-# Union of results
-
-
 ```{r}
-tprFdpPlots_common <- list()
+library(openxlsx)
 
-comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply(
-          combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ],
-          2,
-          paste,
-          collapse = " - "))
-plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33))
-plot_titles[1:4] <- paste0(plot_titles[1:4], "A")
+excel_fig_6a <- bind_rows(
+  lapply(names(tprFdpPlots)[c(1,2,5)], function(n) {
+    df <- tprFdpPlots[[i]]$data[ , c("tpr", "fdp", "method")] %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
 
-filter <- !is.na(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval)
 
-for (i in comparisons_loop)
-{
-tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval[filter],
-             rowData(pe_original[["msqrobAggregate"]])$ups[filter],
-             rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval[filter])
-
-tprFdpSGD <- tprFdp(
-    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$pval[filter],
-    rowData(pe_sgd[["msqrobAggregate"]])$ups[filter],
-    rowData(pe_sgd[["msqrobAggregate"]])[[i]]$adjPval[filter]
+excel_fig_6b <- bind_rows(
+  lapply(names(logFC_plots)[c(1,2,5)], function(n) {
+    df <- logFC_plots[[i]]$data %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
 )
 
 
 
-tprFdpDAE <- tprFdp(
-    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$pval[filter],
-    rowData(pe_DAE[["msqrobAggregate"]])$ups[filter],
-    rowData(pe_DAE[["msqrobAggregate"]])[[i]]$adjPval[filter]
-)
-tprFdpVAE <- tprFdp(
-    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$pval[filter],
-    rowData(pe_VAE[["msqrobAggregate"]])$ups[filter],
-    rowData(pe_VAE[["msqrobAggregate"]])[[i]]$adjPval[filter]
-)
+file_path <- here("Figures/Source_Data.xlsx")
 
-tprFdpCF <- tprFdp(
-    rowData(pe_CF[["msqrobAggregate"]])[[i]]$pval[filter],
-    rowData(pe_CF[["msqrobAggregate"]])$ups[filter],
-    rowData(pe_CF[["msqrobAggregate"]])[[i]]$adjPval[filter]
-)
+# Load existing workbook
+wb <- loadWorkbook(file_path)
 
-tprFdpknn <- tprFdp(
-    rowData(pe_knn[["msqrobAggregate"]])[[i]]$pval[filter],
-    rowData(pe_knn[["msqrobAggregate"]])$ups[filter],
-    rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval[filter]
-)
+# Add new worksheet
+addWorksheet(wb, "Fig_6a")
 
-hlp <- rbind(
-    cbind(tprFdpSGD, method = "GMF"),
-    cbind(tprFdpDAE, method = "DAE"),
-    cbind(tprFdpVAE, method = "VAE"),
-    cbind(tprFdpCF, method = "CF"),
-    cbind(tprFdpknn, method = "KNN"),
-    cbind(tprFdporiginal, method = "no imputation")
-)
-    hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
-    select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T))
-    select[select == 0] <- 1
+# Write data
+writeData(wb, "Fig_6a", excel_fig_6a)
 
+# Add new worksheet
+addWorksheet(wb, "Fig_6b")
 
-tprFdpPlots_common[[i]] <- hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no imputation")) %>% 
-    ggplot(aes(x = fdp, y = tpr, color = method)) +
-    geom_path() + 
-    geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ], 
-                aes(x = fdp, y = tpr, color = method), cex = 2) +
-    theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) + 
-    xlab("FDP") + ylab("TPR") + theme(legend.position = "none")
+# Write data
+writeData(wb, "Fig_6b", excel_fig_6b)
 
-
-
-}
-
-
-tprFdpPlots_common
-
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
 ```
-
 
 
 ```{r}
 
+excel_supp_fig_33 <- bind_rows(
+  lapply(names(tprFdpPlots), function(n) {
+    df <- tprFdpPlots[[i]]$data[ , c("tpr", "fdp", "method")] %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
 
-logFC_plots_common <- list()
-for (i in comparisons_loop)
-{
 
-    
-    logFC <- data.frame(
-        GMF = rowData(pe_sgd[["msqrobAggregate"]])[[i]][filter, 1],
-    DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][filter, 1],
-    VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][filter, 1],
-    CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][filter, 1],
-    KNN = rowData(pe_knn[["msqrobAggregate"]])[[i]][filter, 1],
-    original = rowData(pe_original[["msqrobAggregate"]])[[i]][filter, 1],
-    ups = rowData(pe_sgd[["msqrobAggregate"]])$ups[filter])
-    
-    logFC <- logFC %>% gather(method, log2FC, c("GMF", 
-                                            "DAE", "VAE", "CF", "KNN", "original"))
-    logFC$ups <- factor(logFC$ups, labels = c("Yeast", "Human spike-in"))
-    logFC$method <- factor(logFC$method, levels = c("GMF", 
-                                                "DAE", "VAE", "CF", "KNN", "original"),
-                       labels = c("GMF", 
-                                                "DAE", "VAE", "CF", "KNN", "no imputation"))
+# Load existing workbook
 
-logFC_plots_common[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) +
-    geom_boxplot() +
-    geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30",
-               linetype = "solid", alpha =0.5) + 
-    ggtitle(plot_titles[comparisons_loop == i]) + 
-    theme_bw() + 
-    theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank(),
-          axis.title.y = element_text(size = 7), axis.text = element_text(size = 6), plot.title = element_text(size=10),
-          strip.text.x = element_text(size = 6))  +    
-    scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) +
-    scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) + 
-  facet_wrap(~ups)  +
-   colScale
+# Add new worksheet
+addWorksheet(wb, "Supp_Fig_33")
+
+# Write data
+writeData(wb, "Supp_Fig_33", excel_supp_fig_33)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
 
 
 
-}
+excel_supp_fig_34 <- bind_rows(
+  lapply(names(logFC_plots), function(n) {
+    df <- logFC_plots[[i]]$data %>% 
+      as.data.frame() %>% 
+      mutate("Comparison" = n)
+  })
+)
 
 
-logFC_plots_common
+# Load existing workbook
+
+# Add new worksheet
+addWorksheet(wb, "Supp_Fig_34")
+
+# Write data
+writeData(wb, "Supp_Fig_34", excel_supp_fig_34)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
 ```
 
+```{r}
+df_tp_fp <- 
+  rbind(
+      tp_table %>% as.data.frame() %>% rownames_to_column(var = "Comparison") %>% 
+        pivot_longer(cols = -Comparison, names_to = c("Method"), values_to = "Number") %>% 
+        mutate("Evaluation" = "True positives"), 
+      fp_table %>% as.data.frame() %>% rownames_to_column(var = "Comparison") %>% 
+        pivot_longer(cols = -Comparison, names_to = "Method", values_to = "Number") %>% 
+        mutate("Evaluation" = "False positives"))
+df_tp_fp$Method <- factor(df_tp_fp$Method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation"))
+df_tp_fp$Evaluation <- factor(df_tp_fp$Evaluation, 
+                              levels = c("True positives", "False positives"))
 
 
+plot_tp_fp <- ggplot(data = df_tp_fp,
+      aes(x = Evaluation, y = Number, fill = Method)) + 
+  geom_bar(stat = "identity",  width = 0.4,
+           position=position_dodge(width = 0.5)) + 
+  facet_wrap(~Comparison) + 
+  theme_bw() + 
+  colScale_fill + 
+  theme(axis.text = element_text(size = 8, angle = 90), 
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank())
 
+ggsave(filename = here("Figures/plot_TP_FP.pdf"), plot = plot_tp_fp, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
-
-
+```
 
 ```{r}
 
-full_plot_tprfdp_common <- gridExtra::grid.arrange(grobs = append(tprFdpPlots_common,
-                                    list(ggpubr::as_ggplot(legend))),
-                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
+excel_supp_fig_32 <- df_tp_fp
 
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_32")
 
-saveRDS(object = append(tprFdpPlots_common,
-                                    list(ggpubr::as_ggplot(legend))),
-        file = here("Analyses/CPTAC_nolab1/Output/tprfdpplots_common.RDS"))
-ggsave(filename = here("Analyses/CPTAC_nolab1/Output/full_plot_tprfdp_common.jpeg"), plot = full_plot_tprfdp_common,
-       width = 3600, units = "px", height = 3000)
-ggsave(filename = here("Figures/full_plot_tprfdp_common.pdf"), plot = full_plot_tprfdp_common, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+# Write data
+writeData(wb, "Supp_fig_32", excel_supp_fig_32)
 
-
-full_plot_lfc_common <- gridExtra::grid.arrange(grobs = append(logFC_plots_common,
-                                    list(ggpubr::as_ggplot(legend_lfc))),
-                        layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11)))
-
-saveRDS(object = append(logFC_plots_common,
-                                    list(ggpubr::as_ggplot(legend_lfc))),
-        file = here("Analyses/CPTAC_nolab1/Output/logfcplots_common.RDS"))
-ggsave(filename = here("Figures/full_plot_lfc_common.jpeg"), plot = full_plot_lfc_common, width = 4500, unit = "px", height = 3000)
-ggsave(filename = here("Figures/full_plot_lfc_common.pdf"), plot = full_plot_lfc_common, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
-
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
 ```
+
+<!-- # Union of results -->
+
+
+<!-- ```{r} -->
+<!-- tprFdpPlots_common <- list() -->
+
+<!-- comparisons_loop <- c(paste0("ridgecondition", c("B","C","D","E")), apply( -->
+<!--           combn(paste0("ridgecondition", c("B","C","D","E")), 2)[2:1, ], -->
+<!--           2, -->
+<!--           paste, -->
+<!--           collapse = " - ")) -->
+<!-- plot_titles <- paste0(substr(comparisons_loop,15, stop = 15), " versus ", substr(comparisons_loop, 33, 33)) -->
+<!-- plot_titles[1:4] <- paste0(plot_titles[1:4], "A") -->
+
+<!-- filter <- !is.na(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval) -->
+
+<!-- for (i in comparisons_loop) -->
+<!-- { -->
+<!-- tprFdporiginal <- tprFdp(rowData(pe_original[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--              rowData(pe_original[["msqrobAggregate"]])$ups[filter], -->
+<!--              rowData(pe_original[["msqrobAggregate"]])[[i]]$adjPval[filter]) -->
+
+<!-- tprFdpSGD <- tprFdp( -->
+<!--     rowData(pe_sgd[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--     rowData(pe_sgd[["msqrobAggregate"]])$ups[filter], -->
+<!--     rowData(pe_sgd[["msqrobAggregate"]])[[i]]$adjPval[filter] -->
+<!-- ) -->
+
+
+
+<!-- tprFdpDAE <- tprFdp( -->
+<!--     rowData(pe_DAE[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--     rowData(pe_DAE[["msqrobAggregate"]])$ups[filter], -->
+<!--     rowData(pe_DAE[["msqrobAggregate"]])[[i]]$adjPval[filter] -->
+<!-- ) -->
+<!-- tprFdpVAE <- tprFdp( -->
+<!--     rowData(pe_VAE[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--     rowData(pe_VAE[["msqrobAggregate"]])$ups[filter], -->
+<!--     rowData(pe_VAE[["msqrobAggregate"]])[[i]]$adjPval[filter] -->
+<!-- ) -->
+
+<!-- tprFdpCF <- tprFdp( -->
+<!--     rowData(pe_CF[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--     rowData(pe_CF[["msqrobAggregate"]])$ups[filter], -->
+<!--     rowData(pe_CF[["msqrobAggregate"]])[[i]]$adjPval[filter] -->
+<!-- ) -->
+
+<!-- tprFdpknn <- tprFdp( -->
+<!--     rowData(pe_knn[["msqrobAggregate"]])[[i]]$pval[filter], -->
+<!--     rowData(pe_knn[["msqrobAggregate"]])$ups[filter], -->
+<!--     rowData(pe_knn[["msqrobAggregate"]])[[i]]$adjPval[filter] -->
+<!-- ) -->
+
+<!-- hlp <- rbind( -->
+<!--     cbind(tprFdpSGD, method = "GMF"), -->
+<!--     cbind(tprFdpDAE, method = "DAE"), -->
+<!--     cbind(tprFdpVAE, method = "VAE"), -->
+<!--     cbind(tprFdpCF, method = "CF"), -->
+<!--     cbind(tprFdpknn, method = "KNN"), -->
+<!--     cbind(tprFdporiginal, method = "no imputation") -->
+<!-- ) -->
+<!--     hlp$method <- factor(hlp$method, levels = c("GMF","DAE","VAE","CF","KNN", "no imputation")) -->
+<!--     select <- hlp %>% group_by(method) %>% summarise(select = sum(adjPval < 0.05, na.rm = T)) -->
+<!--     select[select == 0] <- 1 -->
+
+
+<!-- tprFdpPlots_common[[i]] <- hlp %>% filter(method %in% c("GMF", "DAE","VAE","CF","KNN","no imputation")) %>%  -->
+<!--     ggplot(aes(x = fdp, y = tpr, color = method)) + -->
+<!--     geom_path() +  -->
+<!--     geom_point(data = hlp[c(select$select + nrow(tprFdpSGD)*c(0:(length(unique(hlp$method))-1)))  , ],  -->
+<!--                 aes(x = fdp, y = tpr, color = method), cex = 2) + -->
+<!--     theme_bw() + colScale + ggtitle(plot_titles[comparisons_loop == i]) +  -->
+<!--     xlab("FDP") + ylab("TPR") + theme(legend.position = "none") -->
+
+
+
+<!-- } -->
+
+
+<!-- tprFdpPlots_common -->
+
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+
+
+<!-- logFC_plots_common <- list() -->
+<!-- for (i in comparisons_loop) -->
+<!-- { -->
+
+
+<!--     logFC <- data.frame( -->
+<!--         GMF = rowData(pe_sgd[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     DAE = rowData(pe_DAE[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     VAE = rowData(pe_VAE[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     CF = rowData(pe_CF[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     KNN = rowData(pe_knn[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     original = rowData(pe_original[["msqrobAggregate"]])[[i]][filter, 1], -->
+<!--     ups = rowData(pe_sgd[["msqrobAggregate"]])$ups[filter]) -->
+
+<!--     logFC <- logFC %>% gather(method, log2FC, c("GMF",  -->
+<!--                                             "DAE", "VAE", "CF", "KNN", "original")) -->
+<!--     logFC$ups <- factor(logFC$ups, labels = c("Yeast", "Human spike-in")) -->
+<!--     logFC$method <- factor(logFC$method, levels = c("GMF",  -->
+<!--                                                 "DAE", "VAE", "CF", "KNN", "original"), -->
+<!--                        labels = c("GMF",  -->
+<!--                                                 "DAE", "VAE", "CF", "KNN", "no imputation")) -->
+
+<!-- logFC_plots_common[[i]] <- logFC %>% ggplot(aes(x = method, y = log2FC, col = method)) + -->
+<!--     geom_boxplot() + -->
+<!--     geom_hline(data = y_intercepts[comparisons_loop == i,], aes(yintercept = yintercept), color = "grey30", -->
+<!--                linetype = "solid", alpha =0.5) +  -->
+<!--     ggtitle(plot_titles[comparisons_loop == i]) +  -->
+<!--     theme_bw() +  -->
+<!--     theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank(), -->
+<!--           axis.title.y = element_text(size = 7), axis.text = element_text(size = 6), plot.title = element_text(size=10), -->
+<!--           strip.text.x = element_text(size = 6))  +     -->
+<!--     scale_fill_discrete(name = "Protein", labels = c("Yeast", "Human spike-in")) + -->
+<!--     scale_x_discrete(labels = function(x) gsub("no imputation", "no \nimputation", x)) +  -->
+<!--   facet_wrap(~ups)  + -->
+<!--    colScale -->
+
+
+
+<!-- } -->
+
+
+<!-- logFC_plots_common -->
+<!-- ``` -->
+
+
+
+
+
+
+
+
+<!-- ```{r} -->
+
+<!-- full_plot_tprfdp_common <- gridExtra::grid.arrange(grobs = append(tprFdpPlots_common, -->
+<!--                                     list(ggpubr::as_ggplot(legend))), -->
+<!--                         layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11))) -->
+
+
+<!-- saveRDS(object = append(tprFdpPlots_common, -->
+<!--                                     list(ggpubr::as_ggplot(legend))), -->
+<!--         file = here("Analyses/CPTAC_nolab1/Output/tprfdpplots_common.RDS")) -->
+<!-- ggsave(filename = here("Analyses/CPTAC_nolab1/Output/full_plot_tprfdp_common.jpeg"), plot = full_plot_tprfdp_common, -->
+<!--        width = 3600, units = "px", height = 3000) -->
+<!-- ggsave(filename = here("Figures/full_plot_tprfdp_common.pdf"), plot = full_plot_tprfdp_common, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215) -->
+
+
+<!-- full_plot_lfc_common <- gridExtra::grid.arrange(grobs = append(logFC_plots_common, -->
+<!--                                     list(ggpubr::as_ggplot(legend_lfc))), -->
+<!--                         layout_matrix = rbind(c(1:4), c(5:8), c(9:10,11,11))) -->
+
+<!-- saveRDS(object = append(logFC_plots_common, -->
+<!--                                     list(ggpubr::as_ggplot(legend_lfc))), -->
+<!--         file = here("Analyses/CPTAC_nolab1/Output/logfcplots_common.RDS")) -->
+<!-- ggsave(filename = here("Figures/full_plot_lfc_common.jpeg"), plot = full_plot_lfc_common, width = 4500, unit = "px", height = 3000) -->
+<!-- ggsave(filename = here("Figures/full_plot_lfc_common.pdf"), plot = full_plot_lfc_common, device = "pdf", dpi = 500, units = "mm", width = 180, height = 215) -->
+
+<!-- ``` -->
 

@@ -1,0 +1,226 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-07-23'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(nipals)
+library(here)
+library(scran)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+```
+
+
+
+
+```{r}
+empca <- function (x, w, ncomp = min(nrow(x), ncol(x)), center = FALSE, 
+    scale = TRUE, maxiter = 100, tol = 1e-06, seed = NULL, fitted = FALSE, 
+    gramschmidt = TRUE, verbose = FALSE) 
+{
+  
+    centering <- colMeans(x, na.rm = T)
+    x <- t(x) - centering
+  
+    x <- as.matrix(x)
+    nvar <- ncol(x)
+    nobs <- nrow(x)
+    x.orig <- x
+    if (missing(w)) {
+        w = !is.na(x)
+    }
+    col.na.count <- apply(x, 2, function(x) sum(!is.na(x)))
+    if (any(col.na.count == 0)) 
+        stop("At least one column is all NAs")
+    row.na.count <- apply(x, 1, function(x) sum(!is.na(x)))
+    if (any(row.na.count == 0)) 
+        stop("At least one row is all NAs")
+    if (center) {
+        cmeans <- colMeans(x, na.rm = TRUE)
+        x <- sweep(x, 2, cmeans, "-")
+    }
+    else cmeans <- NA
+    if (scale) {
+        csds <- apply(x, 2, sd, na.rm = TRUE)
+        x <- sweep(x, 2, csds, "/")
+    }
+    else csds <- NA
+    TotalSS <- sum(x * x, na.rm = TRUE)
+    x.miss <- is.na(x)
+    has.na <- any(x.miss)
+    x[x.miss] <- 0
+    w[x.miss] <- 0
+    C <- matrix(NA, nrow = nobs, ncol = ncomp)
+    if (missing(seed)) {
+        P <- diag(max(ncomp, nvar))
+    }
+    else {
+        set.seed(seed)
+        ranmat <- matrix(rnorm(nobs * ncomp), nrow = nobs, ncol = ncomp)
+        P <- qr.Q(qr(ranmat))
+    }
+    P <- P[1:nvar, 1:ncomp]
+    for (emiter in 1:maxiter) {
+        if (verbose > 1) 
+            cat(emiter, "/", maxiter, "----------------\n")
+        P0 <- P
+        C[] <- 0
+        for (i in 1:nobs) {
+            C[i, ] <- t(lm.wfit(P, x[i, ], w[i, ])$coef)
+        }
+        C[is.na(C)] <- 0
+        if (verbose > 1) {
+            cat("C\n")
+            print(signif(C, 2))
+        }
+        if (verbose > 1) {
+            cat("x-CP\n")
+            print(round(x - C %*% P, 2))
+        }
+        x1 = x
+        for (h in 1:ncomp) {
+            wC = w * C[, h]
+            P[, h] <- colSums(x1 * wC)/colSums(wC * C[, h])
+            if (all(is.na(P[, h]))) 
+                P[, h] <- 0
+            x1 <- x1 - outer(C[, h], P[, h])
+            x1[x.miss] <- 0
+        }
+        if (gramschmidt) {
+            eig <- sqrt(colSums(C^2))
+            qrc <- qr(C)
+            C <- qr.Q(qrc)
+            di <- ifelse(diag(qr.R(qrc)) < 0, -1, 1)
+            C <- C * rep(di, each = nrow(C))
+            qrp <- qr(P)
+            P <- qr.Q(qrp)
+            di <- ifelse(diag(qr.R(qrp)) < 0, -1, 1)
+            P <- P * rep(di, each = nrow(P))
+        }
+        else {
+            eig <- sqrt(colSums(C^2))
+        }
+        if (verbose > 0) {
+            cat("EM Iter:", emiter, " R2:", 1 - (sum(x1 * x1, 
+                na.rm = TRUE)/TotalSS), "\n")
+        }
+        if (max(abs(P0 - P)) < tol) 
+            break
+    }
+    scores <- C
+    loadings <- P
+    if (fitted) {
+        xhat <- tcrossprod(sweep(scores, 2, eig, "*"), loadings)
+        if (scale) 
+            xhat <- sweep(xhat, 2, csds, "*")
+        if (center) 
+            xhat <- sweep(xhat, 2, cmeans, "+")
+        rownames(xhat) <- rownames(x.orig)
+        colnames(xhat) <- colnames(x.orig)
+    }
+    else {
+        xhat <- NULL
+    }
+    R2cum <- rep(NA, ncomp)
+    for (ii in 1:ncomp) {
+        xhat.ii <- tcrossprod(sweep(scores[, 1:ii, drop = FALSE], 
+            2, eig[1:ii], "*"), loadings[, 1:ii, drop = FALSE])
+        xhat.ii[x.miss] <- NA
+        R2cum[ii] <- sum(xhat.ii * xhat.ii, na.rm = TRUE)/TotalSS
+    }
+    R2 <- c(R2cum[1], diff(R2cum))
+    rownames(scores) <- rownames(x)
+    colnames(scores) <- paste("PC", 1:ncol(scores), sep = "")
+    rownames(loadings) <- colnames(x)
+    colnames(loadings) <- paste("PC", 1:ncol(loadings), sep = "")
+    
+    xhat <- t(xhat + centering)
+    out <- list(eig = eig, scores = scores, loadings = loadings, 
+        fitted = xhat, ncomp = ncomp, R2 = R2, iter = emiter, 
+        center = centering, scale = csds)
+    return(out)
+}
+```
+
+```{r}
+set.seed(100)
+sce <- readRDS(file = here("Data/Petrosius/petrosius_sce.RDS"))
+data <- t(assay(sce, "logintensities"))
+
+begin_time <- Sys.time()
+  
+df <- empca(data, center = FALSE, scale = F, ncomp = 5, 
+             fitted = TRUE, verbose = TRUE)
+  
+end_time <- Sys.time()
+  
+time_difference <- end_time - begin_time
+cat(time_difference)
+
+saveRDS(object = df, file = paste0(here("Analyses/Petrosius/Output/"),"empca_sce.RDS"))
+saveRDS(object = time_difference, 
+        file = paste0(here("Analyses/Petrosius/Output/"),"empca_time.RDS"))
+
+```
+
+```{r}
+set.seed(100)
+for(i in c(1:10)){
+
+  sce <- readRDS(paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR25_", i, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+  
+  
+  
+  df <- empca(data, center = FALSE,  scale = F, ncomp = 5, 
+               fitted = TRUE, verbose = TRUE)
+    
+  saveRDS(object = df, file = paste0(here("Analyses","Petrosius","Output"),"/empca_MISTOT10_MNAR25_", i, ".RDS"))
+
+}
+```
+
+```{r}
+set.seed(100)
+
+for(i in c(1:10)){
+
+  sce <- readRDS(paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR50_", i, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+  
+  
+  
+  df <- empca(data, center = FALSE, scale = F,  ncomp = 5, 
+               fitted = TRUE, verbose = TRUE)
+    
+  saveRDS(object = df, file = paste0(here("Analyses","Petrosius","Output"),"/empca_MISTOT10_MNAR50_", i, ".RDS"))
+
+}
+```
+
+
+```{r}
+set.seed(100)
+
+for(i in c(1:10)){
+
+  sce <- readRDS(paste0(here("Data","Petrosius"),"/petrosius_MISTOT10_MNAR75_", i, ".RDS"))
+  data <- t(sce$data[rowMeans(is.na(sce$data))<1,])
+  
+  
+  
+  df <- empca(data, center = FALSE, scale = F,  ncomp = 5, 
+               fitted = TRUE, verbose = TRUE)
+    
+  saveRDS(object = df, file = paste0(here("Analyses","Petrosius","Output"),"/empca_MISTOT10_MNAR75_", i, ".RDS"))
+
+}
+
+
+```

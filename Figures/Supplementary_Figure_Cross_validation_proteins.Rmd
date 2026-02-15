@@ -1,0 +1,151 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(here)
+```
+
+
+# CV plots
+
+```{r}
+leduc_batch_cv <- readRDS(file = here("Analyses/Leduc/Output/crossval_batch.RDS"))
+leduc_batch_proteins_cv <- readRDS(file = here("Analyses/Leduc/Output/crossval_batch_proteins.RDS"))
+
+petrosius_cv <- readRDS(file = here("Analyses/Petrosius/Output/crossval.RDS"))
+petrosius_proteins_cv <- readRDS(file = here("Analyses/Petrosius/Output/crossval_proteins.RDS"))
+
+cv_cptac <- readRDS(file = here("Analyses/CPTAC/Output/crossval.RDS"))
+cv_cptac_proteins <- readRDS(file = here("Analyses/CPTAC/Output/crossval_proteins.RDS"))
+
+```
+
+```{r}
+df_leduc <- data.frame("deviance" = c(c(leduc_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(leduc_batch_proteins_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+                       "ncomp" = c(c(leduc_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(leduc_batch_proteins_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("Best cross-validation results",  
+	                                        c(length(c(leduc_batch_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                      rep(c("Protein feature-level covariates added"), 
+	                                      each = length(c(leduc_batch_proteins_cv %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+
+	
+df_petrosius <- data.frame("deviance" = c(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(petrosius_proteins_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+	                       "ncomp" = c(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(petrosius_proteins_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("Best cross-validation results",  
+	                                        c(length(c(petrosius_cv %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                      rep(c("Protein feature-level covariates added"), 
+	                                      each = length(c(petrosius_proteins_cv %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+	
+	
+
+	
+df_cptac <- data.frame("deviance" = c(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean,
+	                         c(cv_cptac_proteins %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean),
+	                       "ncomp" = c(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp,
+	                         c(cv_cptac_proteins %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$ncomp),
+	                       "method" = c(rep("Best cross-validation results",  
+	                                        c(length(c(cv_cptac %>% group_by(ncomp) %>% summarise(mean = mean(dev)))$mean))),
+	                                    rep(c("Protein feature-level covariates added"),
+	                                        each = length(c(cv_cptac_proteins %>% group_by(ncomp) %>% 
+	                                                          summarise(mean = mean(dev)))$mean))))
+
+
+df_cv_all <- rbind(cbind(df_petrosius, "data" = "Petrosius"), cbind(df_leduc, "data" = "Leduc"), cbind(df_cptac, "data" = "CPTAC"))
+df_cv_all$data <- factor(df_cv_all$data, levels = c("Petrosius", "Leduc", "CPTAC"))
+df_cv_all$method <- factor(df_cv_all$method, levels = c("Best cross-validation results", 
+                                                        "Protein feature-level covariates added"))
+
+```
+
+```{r}
+
+
+plot_petrosius <- ggplot(subset(df_cv_all, data == "Petrosius"), 
+                         aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("Best cross-validation results" = "#BC3C29FF",
+                                 "Protein feature-level covariates added" = "#4269D0FF")) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Petrosius")
+
+plot_leduc <- ggplot(subset(df_cv_all, data == "Leduc"), 
+                     aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("Best cross-validation results" = "#BC3C29FF",
+                                 "Protein feature-level covariates added" = "#4269D0FF")) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Leduc")
+
+plot_cptac <- ggplot(subset(df_cv_all, data == "CPTAC"), 
+                     aes(x = ncomp, y = deviance, col = method)) +
+  geom_point() + geom_line() + theme_bw() +
+  ylab("Mean out-of-sample deviances") + xlab("Number of latent factors") +
+  scale_colour_manual(values = c("Best cross-validation results" = "#BC3C29FF",
+                                 "Protein feature-level covariates added" = "#4269D0FF")) +
+  theme(legend.position = "bottom", legend.title = element_blank(),
+        legend.key.height = unit(0.3, "cm"), legend.direction = "horizontal",
+        legend.box = "horizontal", plot.title = element_text(hjust = 0.5)) +
+  ggtitle("CPTAC")
+
+get_legend <- function(myggplot) {
+  g <- ggplotGrob(myggplot)
+  legend <- g$grobs[[which(sapply(g$grobs, function(x) x$name) == "guide-box")]]
+  return(legend)
+}
+
+plot_cptac_nolegend <- plot_cptac + theme(legend.position = "none")
+
+
+plots_arranged <- ggarrange(plot_petrosius, plot_leduc, plot_cptac_nolegend, 
+                            labels = c("A", "B", "C"),  # Labels above y-axis
+                            ncol = 3)
+
+final_plot <- ggarrange(plots_arranged, get_legend(plot_cptac + theme(legend.position = "bottom")), ncol = 1, heights = c(3, 0.3)) 
+
+ggsave(plot = final_plot, filename = here("Figures/Supplementary_cv_plot_proteins.pdf"), 
+       device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+```
+
+
+```{r}
+library(openxlsx)
+
+excel_supp_fig_16 <- rbind(plot_petrosius$data,
+                           plot_leduc$data,
+                           plot_cptac$data)
+
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+# Load existing workbook
+wb <- loadWorkbook(file_path)
+
+# Add new worksheet
+addWorksheet(wb, "Supp_fig_16")
+
+# Write data
+writeData(wb, "Supp_fig_16", excel_supp_fig_16)
+
+# Save
+saveWorkbook(wb, file_path, overwrite = TRUE)
+```
+

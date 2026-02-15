@@ -1,0 +1,37 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(here)
+```
+
+```{r}
+fixed_feature = 5000
+fixed_sample = 1000
+fixed_dim = 10
+
+for (i in c(100, 1000, 10000, "1e+05")){
+    df <- read.csv(here(paste0('Data/Computational_time_benchmark/simulated_', fixed_feature, '_features_', i, '_samples.csv')))
+    df$X <- c(1:length(df$X))
+    write.csv(x = df, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", fixed_feature, 
+                      "_features_", i, "_samples_nocolnames.csv")))
+    
+}
+
+for (i in c(100, 1000, 10000, "1e+05")){
+    df <- read.csv(here(paste0('Data/Computational_time_benchmark/simulated_', i, '_features_', fixed_sample, '_samples.csv')))
+    df$X <- c(1:length(df$X))
+    write.csv(x = df, 
+          file = here(paste0("Data/Computational_time_benchmark/simulated_", i, 
+                      "_features_", fixed_sample, "_samples_nocolnames.csv")))
+    
+}
+```
+

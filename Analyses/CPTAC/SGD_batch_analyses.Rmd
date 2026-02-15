@@ -26,7 +26,11 @@ set.seed(100)
 # Original data
 
 ```{r}
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
+
 sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
+
+# Define the different labs and conditions in the colData
 cond <- which(
   strsplit(colnames(sce)[[1]][1], split = "")[[1]] == "A") # find where condition is stored
 
@@ -36,6 +40,7 @@ colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
 
 colData(sce)$lab <- rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor
 
+# Define the design: 2 fixed effects for the different labs.
 X <- model.matrix(~1 + lab, colData(sce))
 
 ```
@@ -44,6 +49,9 @@ X <- model.matrix(~1 + lab, colData(sce))
 ```{r}
 begin_time <- Sys.time()
 family <- gaussian()
+# Run GMF on the original data that is filtered, median normalized and preprocessed in
+# /Data/CPTAC_data.Rmd. 2 fixed effects are included for the different labs.
+
 sgd <-  calculateGMF(sce, family = family, X = X, exprs_values = "logintensities", 
                        control.alg = list(tol = 0.001, maxiter = 10000),
                        ncomponents = 4)
@@ -64,6 +72,11 @@ saveRDS(time_diff, file = here("Analyses","CPTAC","Output","sgd_batch_time.RDS")
 
 
 ```{r}
+
+# Run GMF for the different simulations in which
+# 25, 50 and 75% of the simulated missing values are missing due to low abundance.
+# 2 fixed effects are considered to account for lab. 
+
 
 for(i in c(1:10)){
   MISTOT10_MNAR25 <- readRDS(paste0(here("Data","CPTAC_data"),"/CPTAC_MISTOT10_MNAR25_", i, ".RDS"))

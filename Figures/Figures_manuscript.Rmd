@@ -18,6 +18,8 @@ library(limma)
 library(RColorBrewer)
 library(tidyverse)
 library(readr)
+library(xlsx)
+
 devtools::load_all(here("omicsGMF"))
 
 ```
@@ -119,7 +121,7 @@ plot_CPTAC_all <- lapply(1:9, function(i){
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
 })
 
-
+plot_CPTAC_all[[1]] <- plot_CPTAC_all[[1]] + xlab("GMF 1") + ylab("GMF 2")
 
 pltCPTACPanel1 <- ggpubr::ggarrange(plot_CPTAC_all[[1]], plot_CPTAC_all[[2]], plot_CPTAC_all[[3]], 
                                     plot_CPTAC_all[[4]], plot_CPTAC_all[[5]], plot_CPTAC_all[[6]],
@@ -141,6 +143,23 @@ legend_pltCPTACPanel1 <- as_ggplot(get_legend(plot_CPTAC_all[[1]]))
 
 
 ggsave(plot = pltCPTACPanel1_all, filename = here("Figures/visualisations_CPTAC_all_labs_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+```
+
+```{r}
+names(MF) <- titles
+excel_supp_fig_9 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Condition" = colData(sce_CPTAC)$condition,
+             "lab" = lab,
+             "method" = n)
+    df
+  })
+)
+
+
 
 ```
 
@@ -220,6 +239,9 @@ plot_CPTAC <- lapply(1:9, function(i){
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
 })
 
+plot_CPTAC[[1]] <- plot_CPTAC[[1]] + xlab("GMF 1") + ylab("GMF 2")
+
+
 pltCPTACPanel2 <- ggpubr::ggarrange(plot_CPTAC[[1]], plot_CPTAC[[2]], plot_CPTAC[[3]], 
                                     plot_CPTAC[[4]], plot_CPTAC[[5]], plot_CPTAC[[6]],
                         ncol = 2, nrow = 3, align = "h", common.legend = TRUE, legend = "bottom")
@@ -242,6 +264,40 @@ ggsave(plot = pltCPTACPanel2_all, filename = here("Figures/visualisations_CPTAC_
 
 ```
 
+```{r}
+names(MF) <- titles
+excel_supp_fig_11 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Condition" = colData(sce_CPTAC_nolab1)$condition,
+             "lab" = colData(sce_CPTAC_nolab1)$lab,
+             "method" = n)
+    df
+  })
+)
+
+```
+
+```{r}
+CPTAC_pca_plot_missing <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce_CPTAC_nolab1))))) +
+  geom_point(alpha = 0.5)+ scale_colour_gradient2(name = "Proportion \nmissing",
+  low = ("red"),
+  mid = "grey",
+  high = ("blue"),
+  midpoint = median(colMeans(is.na(assay(sce_CPTAC_nolab1)))),
+  space = "Lab",
+  na.value = "grey50",
+  transform = "identity",
+  guide = "colourbar",
+  aesthetics = "colour"
+) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() #+ labs(col = "Proportion missing")
+})
+
+```
 
 
 # Petrosius
@@ -312,7 +368,7 @@ Petrosius_pca_plot_sampletype <- lapply(1:9, function(i){
           legend.position = "right") + guides(color = guide_legend(override.aes = list(alpha = 1))) 
 })
 
-
+Petrosius_pca_plot_sampletype[[1]] <- Petrosius_pca_plot_sampletype[[1]] + xlab("GMF 1") + ylab("GMF 2")
 #BPCA not converged
 
 Petrosius_pca_plot_sampletype_1 <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[[1]], Petrosius_pca_plot_sampletype[[2]], Petrosius_pca_plot_sampletype[[3]], 
@@ -337,6 +393,20 @@ legend_pca_plot_sampletype <- as_ggplot(get_legend(Petrosius_pca_plot_sampletype
 ggsave(plot = Petrosius_pca_plot_sampletype_1, filename = here("Figures/visualisations_Petrosius.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 ggsave(plot = Petrosius_pca_plot_sampletype_2, filename = here("Figures/visualisations_Petrosius_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
+
+names(MF) <- titles
+excel_supp_fig_2 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Cell Type" = colData(sce_Petrosius)$SampleType,
+             "method" = n)
+    df
+  })
+)
+
+
+
 ```
 
 ```{r}
@@ -344,7 +414,7 @@ Petrosius_pca_plot_batch_corrected <-
   ggplot(data = sgd_batch, 
        aes(x = PC1,y = PC2, color = as.factor(colData(sce_Petrosius)$SampleType))) +
   geom_point(alpha = 0.5) + scale_colour_manual(values = c("purple3","orange")) +
-    xlab("PC1") + 
+    xlab("GMF 1") + ylab("GMF 2") +
     ggtitle("GMF Treatment") + 
   theme_bw() + 
     labs(col = "Treatment:   ") + 
@@ -360,6 +430,18 @@ petrosius_pca_batchvsnobatch <- ggpubr::ggarrange(Petrosius_pca_plot_sampletype[
 ```{r}
 ggsave(plot = petrosius_pca_batchvsnobatch, filename = here("Figures/visualisations_Petrosius_batch_vs_no_batch.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
 
+supp_fig_15 <- list("GMF" = MF[[1]], "GMF Treatment" = sgd_batch)
+excel_supp_fig_15 <- bind_rows(
+  lapply(names(supp_fig_15), function(n) {
+    df <- supp_fig_15[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Celltype" = colData(sce_Petrosius)$SampleType,
+             "method" = n)
+    df
+  })
+)
+
+
 ```
 
 
@@ -369,22 +451,22 @@ ggsave(plot = petrosius_pca_batchvsnobatch, filename = here("Figures/visualisati
 
 Petrosius_pca_plot_missing <- lapply(1:9, function(i){
   ggplot(data = MF[[i]], 
-       aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce))))) +
+       aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce_Petrosius))))) +
   geom_point(alpha = 0.5)+ scale_colour_gradient2(name = "Proportion \nmissing",
   low = ("red"),
   mid = "grey",
   high = ("blue"),
-  midpoint = 0.6,
+  midpoint = median(colMeans(is.na(assay(sce_Petrosius)))),
   space = "Lab",
   na.value = "grey50",
   transform = "identity",
   guide = "colourbar",
   aesthetics = "colour"
-) + xlab("PC1") + ggtitle(titles[i])  +
+) + xlab("PC1") + ggtitle(titles[i]) + 
   theme_bw() #+ labs(col = "Proportion missing")
   })
 
-
+Petrosius_pca_plot_missing[[1]] <- Petrosius_pca_plot_missing[[1]] + xlab("GMF 1") + ylab("GMF 2")
 
 Petrosius_pca_plot_missing_1 <- ggpubr::ggarrange(Petrosius_pca_plot_missing[[1]], Petrosius_pca_plot_missing[[2]], Petrosius_pca_plot_missing[[3]], 
                                     Petrosius_pca_plot_missing[[4]], Petrosius_pca_plot_missing[[5]], Petrosius_pca_plot_missing[[6]],
@@ -407,6 +489,15 @@ ggsave(plot = Petrosius_pca_plot_missing_1, filename = here("Figures/visualisati
 ggsave(plot = Petrosius_pca_plot_missing_2, filename = here("Figures/visualisations_Petrosius_missing_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
 
+excel_supp_fig_3 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Proportion missing" = colMeans(is.na(assay(sce_Petrosius))),
+             "method" = n)
+    df
+  })
+)
 
 ```
 
@@ -515,6 +606,12 @@ supplt <- ggplot(df_cor,
 
 ggsave(plot = supplt, filename = here("Figures/visualisations_correlations_all_Petrosius.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
 
+
+
+excel_supp_fig_4 <- df_cor %>% mutate(correlation = abs(correlation))
+  
+
+
 ```
 
 
@@ -593,20 +690,25 @@ MF <- list(sgd_batch, DAE_PC$x, VAE_PC$x, CF_PC$x, nipals$scores, KNN_PC$x, QRIL
 
 ### PCA plots subcluster no batch correction
 ```{r}
+lcBatch <- factor(colData(sce)$lcbatch, levels = c("A", "C"), labels = c("Batch 1", "Batch 2"))
 
 Leduc_pca_plot_no_batch_correction <- lapply(1:9, function(i){
 ggplot(data = MF[[i]], 
-       aes(x = PC1,y = PC2, col = subcluster)) +
+       aes(x = PC1,y = PC2, col = subcluster, shape = lcBatch)) +
   geom_point(alpha = 0.5) + xlab("PC1") + ggtitle(titles[i]) + 
-  theme_bw() + labs(col = "Celltype:   ") + 
+  theme_bw() + labs(col = "Celltype:   ", shape = "LC-batch:   ") + 
     theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12),
-          legend.position = "right") + guides(color = guide_legend(override.aes = list(alpha = 1))) + 
-    scale_colour_manual(name = "Cell type", 
-                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF")) 
+          legend.position = "right", legend.box="vertical") + 
+    scale_colour_manual(name = "Cell type:   ", 
+                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF")) + 
+   guides(nrow = 2, 
+    colour = guide_legend(order = 1, override.aes = list(alpha = 1)), 
+    shape = guide_legend(order = 2, override.aes = list(alpha = 1, colour = "black"))
+  )
 
 })
 
-
+Leduc_pca_plot_no_batch_correction[[1]] <- Leduc_pca_plot_no_batch_correction[[1]] + xlab("GMF 1") + ylab("GMF 2")
 
 Leduc_pca_plot_no_batch_correction_1 <- ggpubr::ggarrange(Leduc_pca_plot_no_batch_correction[[1]],
                                                           Leduc_pca_plot_no_batch_correction[[2]],
@@ -632,6 +734,42 @@ legend_Leduc_pca_plot_no_batch_correction <- as_ggplot(get_legend(Leduc_pca_plot
 
 
 ggsave(plot = Leduc_pca_plot_no_batch_correction_2, filename = here("Figures/visualisations_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+
+  
+names(MF) <- titles  
+excel_supp_fig_5 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Cell Type" = subcluster,
+             "lcbatch" = lcBatch,
+             "method" = n)
+    df
+  })
+)
+
+```
+
+
+```{r}
+Leduc_pca_plot_missing <- lapply(1:9, function(i){
+  ggplot(data = MF[[i]], 
+       aes(x = PC1,y = PC2, col = colMeans(is.na(assay(sce))))) +
+  geom_point(alpha = 0.5)+ scale_colour_gradient2(name = "Proportion \nmissing",
+  low = ("red"),
+  mid = "grey",
+  high = ("blue"),
+  midpoint = median(colMeans(is.na(assay(sce)))),
+  space = "Lab",
+  na.value = "grey50",
+  transform = "identity",
+  guide = "colourbar",
+  aesthetics = "colour"
+) + xlab("PC1") + ggtitle(titles[i]) + 
+  theme_bw() #+ labs(col = "Proportion missing")
+  })
 
 ```
 
@@ -698,16 +836,21 @@ minimum_correction_PCs <- prcomp(t(resids_minimum_correction), rank = 10)
 ```{r}
 Leduc_pca_plot_batch_correction <- lapply(1:9, function(i){
 ggplot(data = MF[[i]], 
-       aes(x = PC1,y = PC2, col = subcluster)) +
+       aes(x = PC1,y = PC2, col = subcluster, shape = lcBatch)) +
   geom_point(alpha = 0.5) + xlab("PC1") + ggtitle(titles[i]) + 
-  theme_bw() + labs(col = "Cell type:   ") + 
-    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12)) +
-    guides(color = guide_legend(override.aes = list(alpha = 1))) + 
-    scale_colour_manual(name = "Condition", 
-                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF"))
+  theme_bw() + labs(col = "Cell type:   ", shape = "LC-batch:   ") + 
+    theme(legend.text = element_text(size = 12), legend.title = element_text(size = 12), legend.box="vertical") +
+    scale_colour_manual(name = "Cell type:   ", 
+                        values = c("Monocyte    " = "#4269D0FF", "Melanoma A    " = "#E18727FF", "Melanoma B    " = "#20854EFF")) + 
+    guides(
+    colour = guide_legend(order = 1, override.aes = list(alpha = 1)), 
+    shape = guide_legend(order = 2, override.aes = list(alpha = 1, colour = "black"))
+    )
 
 })
 
+
+Leduc_pca_plot_batch_correction[[1]] <- Leduc_pca_plot_batch_correction[[1]] + xlab("GMF 1") + ylab("GMF 2")
 
 
 Leduc_pca_plot_batch_correction_1 <- ggpubr::ggarrange(Leduc_pca_plot_batch_correction[[1]], Leduc_pca_plot_batch_correction[[2]],
@@ -731,6 +874,20 @@ legend_leduc_pca_plot_batch_correction_sampletype <- as_ggplot(get_legend(Leduc_
 
 ggsave(plot = Leduc_pca_plot_batch_correction_2, filename = here("Figures/visualisations_batch_correction_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
+
+
+names(MF) <- titles  
+excel_supp_fig_6 <- bind_rows(
+  lapply(names(MF), function(n) {
+    df <- MF[[n]][ , c("PC1", "PC2")] %>% 
+      as.data.frame() %>% 
+      mutate("Cell Type" = subcluster,
+             "lcbatch" = lcBatch,
+             "method" = n)
+    df
+  })
+)
+
 ```
 
 
@@ -743,20 +900,53 @@ Introduction_Figure <- ggarrange(
   
   Leduc_pca_plot_no_batch_correction[[4]]+ theme(legend.position = "bottom",
                                                  legend.text = element_text(size = 7), legend.title = element_text(size = 7), 
-                                                 legend.key.size = unit(0.1, "cm"), legend.box.margin =  margin(l = -1, unit = "cm")) +
-    ggtitle("") + guides(col=guide_legend(nrow=2,byrow=TRUE, override.aes = list(alpha = 1))),
+                                                 legend.key.size = unit(0.1, "cm"), legend.box.margin =  margin(l = -1, unit = "cm"),
+                                                 legend.spacing.y = unit(0, "lines")) +
+    ggtitle("") + guides(col=guide_legend(order = 1, nrow=2,byrow=TRUE, override.aes = list(alpha = 1))),
   plot_CPTAC[[4]]+ labs(col = "Condition:", shape = "lab: ") + 
     theme(legend.position = "bottom", legend.text = element_text(size = 7), legend.title = element_text(size = 7),
           legend.key.size = unit(0.1, "cm"), legend.box = "vertical" , 
           legend.spacing.y = unit(0, "lines"), legend.box.margin =  margin(l = -1, unit = "cm")) + ggtitle("") + 
     guides(col=guide_legend(nrow=1,byrow=TRUE, order = 1), shape = guide_legend(nrow = 1)),
-  ncol = 3, widths = c(1/3, 1/3, 1/3), align = "hv", labels = "AUTO")
+  ncol = 3, widths = c(1/3, 1/3, 1/3), align = "hv", labels = "AUTO") + theme(plot.margin = margin(5, 10, 5, 5, "pt"))
 
+
+
+
+Introduction_Figure_2 <- ggarrange(Petrosius_pca_plot_missing[[4]] + theme(legend.position = "bottom")+ ggtitle(""), 
+                                   Leduc_pca_plot_missing[[4]]+ theme(legend.position = "bottom")+ ggtitle(""),
+                                   CPTAC_pca_plot_missing[[4]]+ theme(legend.position = "bottom")+ ggtitle(""),
+                                   ncol = 3, widths = c(1/3, 1/3, 1/3), align = "hv",
+                                   labels = "AUTO")+ theme(plot.margin = margin(5, 15, 5, 5, "pt"))
+
+  
 
 
 
 ggsave(plot = Introduction_Figure, filename = here("Figures/Introduction_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
 
+ggsave(plot = Introduction_Figure_2, filename = here("Figures/Introduction_Figure_2.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+
+excel_fig_1 <- rbind(Petrosius_pca_plot_sampletype[[4]]$data[,c("PC1","PC2")] %>%
+                       as.data.frame() %>% 
+                       mutate("col" = colData(sce_Petrosius)$SampleType),
+                     Leduc_pca_plot_no_batch_correction[[4]]$data[,c("PC1","PC2")] %>%
+                       as.data.frame() %>% 
+                       mutate("col" = colData(sce)$SampleType),
+                     plot_CPTAC[[4]]$data %>%
+                       as.data.frame() %>% 
+                       mutate("col" = colData(sce_CPTAC_nolab1)$lab))
+
+excel_supp_fig_1 <- rbind(Petrosius_pca_plot_missing[[4]]$data[,c("PC1","PC2")] %>%
+                       as.data.frame() %>% 
+                       mutate("col" = colMeans(is.na(assay(sce_Petrosius)))),
+                     Leduc_pca_plot_missing[[4]]$data[,c("PC1","PC2")] %>%
+                       as.data.frame() %>% 
+                       mutate("col" = colMeans(is.na(assay(sce)))),
+                     CPTAC_pca_plot_missing[[4]]$data%>%
+                       as.data.frame() %>% 
+                       mutate("col" = colMeans(is.na(assay(sce_CPTAC_nolab1)))))
 
 
 Visualisation_Figure <- 
@@ -802,7 +992,26 @@ Visualisation_Figure <-
     ncol = 2, widths = c(0.8, 0.2)
 )
 
-ggsave(plot = Visualisation_Figure, filename = here("Figures/Visualisation_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+ggsave(plot = Visualisation_Figure, filename = here("Figures/Visualisation_Figure.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 210)
+
+
+
+excel_fig_3 <- rbind(excel_supp_fig_2 %>% 
+                       filter(method %in% c("GMF", "CF", "KNN")) %>% 
+                       mutate("shape" = NA, "method" = method, "data" = "Petrosius") %>% 
+                       rename("Cell Type" = "col"),
+                     excel_supp_fig_5 %>% 
+                       filter(method %in% c("GMF", "CF", "KNN")) %>% 
+                       mutate("data" = "Leduc") %>% 
+                       rename("Cell Type" = "col", "lcbatch" = "shape"), 
+                     excel_supp_fig_9 %>% 
+                       filter(method %in% c("GMF", "CF", "KNN")) %>% 
+                       mutate("data" = "CPTAC") %>% 
+                       rename("Condition" = "col", "lab" = "shape"),
+                     excel_supp_fig_11 %>% 
+                       filter(method %in% c("GMF", "CF", "KNN")) %>% 
+                       mutate("data" = "CPTAC no lab1") %>% 
+                       rename("Condition" = "col", "lab" = "shape"))
 
 ```
 
@@ -887,6 +1096,10 @@ ggsave(plot = Petrosius_imputation_plot, filename = here("Figures/imputation_Pet
 
 ggsave(plot = Leduc_imputation_plot, filename = here("Figures/imputation_Leduc.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
 
+
+excel_supp_fig_17 <- Petrosius_imputation_plot$data %>% select(-.group)
+excel_supp_fig_19 <- Leduc_imputation_plot$data %>% select(-.group)
+
 ```
 
 ```{r}
@@ -919,6 +1132,14 @@ Petrosius_and_Leduc_imputation_CV <- ggarrange(Petrosius_imputation_plot_CV ,
 
 
 ggsave(plot = Petrosius_and_Leduc_imputation_CV, filename = here("Figures/imputation_default_vs_crossvd_Petrosius_and_Leduc.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+excel_supp_fig_29 <- rbind(Petrosius_imputation_plot_CV$data %>% 
+                             select(-.group) %>% 
+                             mutate(data = "Petrosius"),
+                           Leduc_imputation_plot_CV$data %>% 
+                             select(-.group) %>% 
+                             mutate(data = "Leduc"))
 
 ```
 
@@ -957,6 +1178,14 @@ ggsave(plot = Petrosius_imputation_plot_all, filename = here("Figures/imputation
 ggsave(plot = Leduc_imputation_plot_all, filename = here("Figures/imputation_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
 
 ggsave(plot = Petrosius_and_Leduc_imputation_plot_all, filename = here("Figures/imputation_Petrosius_and_Leduc_all.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+
+excel_supp_fig_18 <- Petrosius_imputation_plot_all$data %>% select(-.group)
+  
+excel_supp_fig_20 <- Leduc_imputation_plot_all$data %>% select(-.group)
+
+
+
 
 ```
 
@@ -1123,6 +1352,35 @@ ggsave(plot = CPTAC_only_lab1_imputation_plot, filename = here("Figures/imputati
 ggsave(plot = CPTAC_all_labs_imputation_plot_all, filename = here("Figures/imputation_CPTAC_all_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
 ggsave(plot = CPTAC_nolab1_imputation_plot_all, filename = here("Figures/imputation_CPTAC_nolab1_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
 ggsave(plot = CPTAC_only_lab1_imputation_plot_all, filename = here("Figures/imputation_CPTAC_lab1_all_methods.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 105)
+
+
+excel_supp_fig_23 <- CPTAC_all_labs_imputation_plot$data %>% select(-.group)
+excel_supp_fig_25 <- CPTAC_nolab1_imputation_plot$data %>% select(-.group)
+excel_supp_fig_27 <- CPTAC_only_lab1_imputation_plot$data %>% select(-.group)
+
+excel_supp_fig_24 <- CPTAC_all_labs_imputation_plot_all$data %>% select(-.group)
+excel_supp_fig_26 <- CPTAC_nolab1_imputation_plot_all$data %>% select(-.group)
+excel_supp_fig_28 <- CPTAC_only_lab1_imputation_plot_all$data %>% select(-.group)
+
+
+
+```
+
+
+```{r}
+# Write to supplementary data
+library(xlsx)
+here()
+write.xlsx(df_summarised_Petrosius %>% as.data.frame(), file= here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_Petrosius", row.names=FALSE)
+write.xlsx(df_summarised_Leduc %>% as.data.frame(), file=here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_Leduc", append=TRUE, row.names=FALSE)
+write.xlsx(df_summarised_CPTAC_all %>% as.data.frame(), file=here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_CPTAC_all", append=TRUE, row.names=FALSE)
+write.xlsx(df_summarised_CPTAC_nolab1 %>% as.data.frame(), file=here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_CPTAC_nolab1", append=TRUE, row.names=FALSE)
+write.xlsx(df_summarised_CPTAC_lab1 %>% as.data.frame(), file=here("Figures/Supplementary_Data_MAE.xlsx"), 
+           sheetName="MAE_CPTAC_lab1", append=TRUE, row.names=FALSE)
 ```
 
 # Distribution plots CPTAC no lab1
@@ -1227,21 +1485,79 @@ data_all$lab <- lab
 
 ```{r}
 
+# 
+# 
+# Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
+#   aes(x = condition, y = intensity, col = condition)) + 
+#   geom_violin() + 
+#   facet_wrap(~origin, ncol = 3) +
+#   labs(col = "Condition") + 
+#   #ylim(c(-10,10)) + 
+#   theme_bw() + 
+#   ylab("Intensity values") + 
+#   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+#         legend.title = element_text(size = 14)) + 
+#     scale_colour_manual(name = "Condition", 
+#                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+#                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+
+medians_observed <- data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(missing == FALSE & origin %in% c("Observed")) %>% group_by(condition) %>% summarize(median = median(intensity))
+medians_observed <- rbind(medians_observed, medians_observed, medians_observed, 
+                          medians_observed, medians_observed, medians_observed)
+medians_observed$origin <- factor(rep(c("original", "Imputed_GMF","DAE","VAE", "CF", "KNN"), 
+                        each = 5), 
+                        levels = c("original", "Imputed_GMF","DAE","VAE", "CF","KNN"),
+                        labels = c("Observed", "GMF-imputed","DAE-imputed","VAE-imputed", "CF-imputed","KNN-imputed"))
+
+medians <- data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))) %>% group_by(condition, origin) %>% 
+  summarize(median = median(intensity, na.rm = T))
 
 
 Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
   aes(x = condition, y = intensity, col = condition)) + 
   geom_violin() + 
+geom_line(data = medians_observed,
+          aes(x = condition, y = median, group = 1),
+          inherit.aes = FALSE,
+          linetype = "dashed", color = "grey50", size = 0.6) + 
+  geom_line(data = medians %>% filter(origin != "Observed"),
+          aes(x = condition, y = median, group = 1),
+          inherit.aes = FALSE,
+          linetype = "dashed", color = "black", size = 0.6) + 
+
   facet_wrap(~origin, ncol = 3) +
   labs(col = "Condition") + 
   #ylim(c(-10,10)) + 
   theme_bw() + 
-  ylab("Intensity") + 
+  ylab("log2-normalized intensities") + 
   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         legend.title = element_text(size = 14)) + 
     scale_colour_manual(name = "Condition", 
                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
+
+# medians <- data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))) %>% group_by(condition, origin) %>% 
+#   summarize(median = median(intensity, na.rm = T))
+# #medians <- rbind(medians, medians, medians, medians, medians, medians)
+# 
+# Imputation_distribution_UPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
+#   aes(x = condition, y = intensity, col = condition)) + 
+#   geom_violin() + 
+# geom_line(data = medians,
+#           aes(x = condition, y = median, group = 1),
+#           inherit.aes = FALSE,
+#           linetype = "dashed", color = "black", size = 0.6) + 
+#   facet_wrap(~origin, ncol = 3) +
+#   labs(col = "Condition") + 
+#   #ylim(c(-10,10)) + 
+#   theme_bw() + 
+#   ylab("Intensity values") + 
+#   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+#         legend.title = element_text(size = 14)) + 
+#     scale_colour_manual(name = "Condition", 
+#                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
+#                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
 
 Imputation_distribution_nonUPS_nolab1 <- ggplot(data_all[data_all$peptide %in% rownames(sce[rownames(sce),][!grepl(rowData(sce[rownames(sce), ])$Proteins,pattern ="UPS")]),] %>% filter(((missing == TRUE)|(missing == FALSE & origin %in% c("Observed")))), 
   aes(x = condition, y = intensity, col = condition)) + 
@@ -1249,7 +1565,7 @@ Imputation_distribution_nonUPS_nolab1 <- ggplot(data_all[data_all$peptide %in% r
   facet_wrap(~origin, ncol = 3) +
   labs(col = "Condition") + 
   theme_bw() + 
-  ylab("Intensity") + 
+  ylab("log2-normalized intensities") + 
   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         legend.title = element_text(size = 14)) + 
     scale_colour_manual(name = "Condition", 
@@ -1265,6 +1581,9 @@ CPTAC_manuscript_plot_imputation <- ggarrange(CPTAC_nolab1_imputation_plot, Impu
 
 
 ggsave(plot = CPTAC_manuscript_plot_imputation, filename = here("Figures/CPTAC_manuscript_plot_imputation.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+excel_fig_5 <- Imputation_distribution_UPS_nolab1$data
+excel_supp_fig_30 <- Imputation_distribution_nonUPS_nolab1$data
 
 ```
 
@@ -1410,13 +1729,11 @@ Distribution_CPTAC_non_UPS_observed_missingness <- ggplot(data_all[data_all$pept
   geom_point() + 
   facet_wrap(~rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor, ncol = 3) +
   theme_bw() +
-  #ylim(c(-10,10)) + 
-  #ggtitle("Missing percentages per sample for spiked-in proteins") + 
   theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         legend.title = element_text(size = 14)) + 
   ylim(c(0,1)) +
   ylab("Proportion of missing values")+
-  ggtitle("Proportion of missing values for spiked-in human peptides")+ 
+  ggtitle("Proportion of missing values for background yeast peptides")+ 
     scale_colour_manual(name = "Condition", 
                         values = c("A" = "#BC3C29FF", "B" = "#EFB118FF", "C" = "#3CA951FF",
                                    "D" = "#97BBF5FF", "E" = "#FF8AB7FF"))
@@ -1429,6 +1746,10 @@ plot_distribution_missingness_CPTAC <- ggarrange(ggarrange(Distribution_CPTAC_UP
 
 ggsave(plot = plot_distribution_missingness_CPTAC, filename = here("Figures/distribution_missingness_CPTAC.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 
+excel_supp_fig_10 <- rbind(
+  Distribution_CPTAC_UPS_observed_missingness$data %>% select(-.group) %>% mutate(group = "Human peptides"),
+  Distribution_CPTAC_non_UPS_observed_missingness$data %>% select(-.group) %>% mutate(group = "Yeast peptides")
+)
 ```
 
 
@@ -1438,7 +1759,7 @@ imputation_plot_per_lab_UPS <- ggplot(data_all[data_all$peptide %in% rownames(sc
   geom_violin() + 
   facet_wrap(~lab*origin, ncol = 3) +
   theme_bw() + 
-  ylab("Intensity") + 
+  ylab("log2-normalized intensities") + 
   #ylim(c(-10,10)) + 
   ggtitle("Imputed intensities of spiked-in \nhuman peptides") + labs(col = "Condition")+ 
   theme(legend.position = "bottom", legend.title = element_text(size = 10), legend.text = element_text(size = 10)) + 
@@ -1451,7 +1772,7 @@ imputation_plot_per_lab_nonUPS <- ggplot(data_all[data_all$peptide %in% rownames
   geom_violin() + 
   facet_wrap(~lab*origin, ncol = 3) +
   theme_bw() + 
-  ylab("Intensity") + 
+  ylab("log2-normalized intensities") + 
   #ylim(c(-10,10)) + 
   ggtitle("Imputed intensities of background \nyeast peptides")+ 
   labs(col = "Condition")+ 
@@ -1470,6 +1791,9 @@ imputation_plot_per_lab <- ggarrange(ggarrange(imputation_plot_per_lab_UPS, impu
 ggsave(plot = imputation_plot_per_lab_UPS, filename = here("Figures/imputation_plot_per_lab_UPS.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 ggsave(plot = imputation_plot_per_lab_nonUPS, filename = here("Figures/imputation_plot_per_lab_nonUPS.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
 ggsave(plot = imputation_plot_per_lab, filename = here("Figures/imputation_plot_per_lab.pdf"), device = "pdf", dpi = 500, units = "mm", width = 180, height = 215)
+
+excel_supp_fig_31 <- rbind(imputation_plot_per_lab_UPS$data %>% mutate(group = "Human peptides"),
+                           imputation_plot_per_lab_nonUPS$data %>% mutate(group = "Yeast peptides"))
 
 ```
 
@@ -1536,6 +1860,11 @@ df_cv_all$method <- factor(df_cv_all$method, levels = c("No known covariates",
                                                         "Known batch or treatment effects", 
                                                         "Known batch and spike-in effects"))
 
+excel_fig_4 <- df_cv_all
+
+write.xlsx(df_cv_all, file= here("Figures/Supplementary_Data_Cross_validation.xlsx"), 
+           sheetName="Cross-validation", row.names=FALSE)
+
 ```
 
 ```{r}
@@ -1592,6 +1921,56 @@ final_plot <- ggarrange(plots_arranged, get_legend(plot_cptac + theme(legend.pos
 
 ggsave(plot = final_plot, filename = here("Figures/cv_plot.pdf"), 
        device = "pdf", dpi = 500, units = "mm", width = 180, height = 90)
+
+```
+
+
+# save excel
+```{r}
+library(openxlsx)
+
+file_path <- here("Figures/Source_Data.xlsx")
+
+wb <- createWorkbook()
+
+# Put all dataframes into a named list
+sheet_list <- list(
+  Figure_1 = excel_fig_1,
+  Figure_3 = excel_fig_3,
+  Figure_4 = excel_fig_4,
+  Figure_5 = excel_fig_5,
+  Supp_fig_1 = excel_supp_fig_1,
+  Supp_fig_2 = excel_supp_fig_2,
+  Supp_fig_3 = excel_supp_fig_3,
+  Supp_fig_4 = excel_supp_fig_4,
+  Supp_fig_5 = excel_supp_fig_5,
+  Supp_fig_6 = excel_supp_fig_6,
+  Supp_fig_9 = excel_supp_fig_9,
+  Supp_fig_10 = excel_supp_fig_10,
+  Supp_fig_11 = excel_supp_fig_11,
+  Supp_fig_15 = excel_supp_fig_15,
+  Supp_fig_17 = excel_supp_fig_17,
+  Supp_fig_18 = excel_supp_fig_18,
+  Supp_fig_19 = excel_supp_fig_19,
+  Supp_fig_20 = excel_supp_fig_20,
+  Supp_fig_23 = excel_supp_fig_23,
+  Supp_fig_24 = excel_supp_fig_24,
+  Supp_fig_25 = excel_supp_fig_25,
+  Supp_fig_26 = excel_supp_fig_26,
+  Supp_fig_27 = excel_supp_fig_27,
+  Supp_fig_28 = excel_supp_fig_28,
+  Supp_fig_29 = excel_supp_fig_29,
+  Supp_fig_30 = excel_supp_fig_30,
+  Supp_fig_31 = excel_supp_fig_31
+)
+
+# Loop through sheets
+for (sheet_name in names(sheet_list)) {
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, sheet_list[[sheet_name]], rowNames = FALSE)
+}
+
+saveWorkbook(wb, file_path, overwrite = TRUE)
 
 ```
 

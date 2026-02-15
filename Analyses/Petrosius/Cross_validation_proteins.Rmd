@@ -1,11 +1,12 @@
 ---
-title: "sgdGMF CPTAC"
+title: "CV Petrosius"
 output: html_document
 date: '2024-07-18'
 ---
 # SGD GMF
 
 ```{r}
+library(here)
 library(sgdGMF)
 library(dplyr)
 library(RSpectra)
@@ -13,7 +14,6 @@ library(scater)
 library(BiocParallel)
 library(BiocSingular)
 library(DelayedArray)
-library(here)
 
 devtools::load_all(here("omicsGMF"))
 
@@ -21,10 +21,9 @@ devtools::load_all(here("omicsGMF"))
 
 # Load data
 ```{r}
-
-# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_nolab1/CPTAC_nolab1_data_preparation.Rmd.
-
-sce <- readRDS(file = here("Data","CPTAC_nolab1","CPTAC_sce.RDS"))
+sce <- readRDS(file = here("Data/Petrosius/petrosius_sce.RDS"))
+design_feature <- model.matrix(~1+PG.ProteinAccessions, data = rowData(sce))
+Z <- design_feature
 
 ```
 
@@ -34,14 +33,12 @@ sce <- readRDS(file = here("Data","CPTAC_nolab1","CPTAC_sce.RDS"))
 set.seed(100)
 
 family <- gaussian()
-
-# Run the cross-validation to select the number of latent factors.
-cv <- calculateCVGMF(sce, family = family, 
-                      exprs_values = "logintensities", ncomponents = seq(1,7,1), 
+cv <- calculateCVGMF(sce, family = family, Z = Z, 
+                      exprs_values = "logintensities", ncomponents = seq(1,10,1), 
                       control.alg = list(tol = 0.001, maxiter = 10000), 
                       control.cv = list(nfolds = 3),
                       ntop = nrow(sce))
-saveRDS(object = cv, file = here("Analyses","CPTAC_nolab1","Output","crossval.RDS"))
+saveRDS(object = cv, file = here("Analyses/Petrosius/Output/crossval_proteins.RDS"))
 
 ```
 

@@ -21,9 +21,8 @@ devtools::load_all(here("omicsGMF"))
 
 # Load data
 ```{r}
-# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_nolab1/CPTAC_nolab1_data_preparation.Rmd.
-
-sce <- readRDS(file = here("Data","CPTAC_nolab1","CPTAC_sce.RDS"))
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
+sce <- readRDS(file = here("Data","CPTAC_data","CPTAC_sce.RDS"))
 
 # Define the condition and labs in colData to include as a known covariate in the GMF model
 
@@ -34,21 +33,26 @@ colData(sce)$condition <- substr(colnames(sce), cond, cond) %>%
   unlist %>%  
   as.factor
 
-colData(sce)$lab <- rep(rep(paste0("lab",2:3),each=3),5) %>% as.factor
+colData(sce)$lab <- rep(rep(paste0("lab",1:3),each=3),5) %>% as.factor
 
-# Lab is included as sample-level covariates.
+# Only lab is included as a known sample-level covariate
 X <- model.matrix(~1+lab, colData(sce))
+
+# Here, protein is included as a known feature-level covariate
+design_feature <- model.matrix(~1+Proteins, data = rowData(sce))
+Z <- design_feature
+
 ```
 
 
 ## Cross validation
 ```{r}
 set.seed(100)
+
 family <- gaussian()
 
-# Run the cross-validation to select the number of latent factors with lab as known covariate.
-
-cv <- calculateCVGMF(sce, family = family, X = X, 
+# Run the cross-validation to select the number of latent factors with lab and protein as known covariates.
+cv <- calculateCVGMF(sce, family = family, X = X, Z = Z, 
                       exprs_values = "logintensities", ncomponents = seq(1,10,1), 
                       control.alg = list(tol = 0.001, maxiter = 10000), 
                       control.cv = list(nfolds = 3),
@@ -57,7 +61,7 @@ cv <- calculateCVGMF(sce, family = family, X = X,
 ```
 
 ```{r}
-saveRDS(object = cv, file = here("Analyses","CPTAC_nolab1","Output","crossval_batch.RDS"))
+saveRDS(object = cv, file = here("Analyses","CPTAC","Output","crossval_batch_proteins.RDS"))
 
 ```
 

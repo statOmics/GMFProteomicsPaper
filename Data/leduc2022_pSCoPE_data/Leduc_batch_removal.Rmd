@@ -1,0 +1,128 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-07"
+---
+
+```{r}
+library(here)
+library(sgdGMF)
+library(dplyr)
+library(RSpectra)
+library(scater)
+library(BiocParallel)
+library(BiocSingular)
+library(DelayedArray)
+library(fullRankMatrix)
+
+
+set.seed(100)
+```
+
+```{r}
+removeBatchEffect <- function (x, batch = NULL, batch2 = NULL, covariates = NULL, 
+    design = matrix(1, ncol(x), 1), group = NULL, ...) 
+{
+    if (is.null(batch) && is.null(batch2) && is.null(covariates)) 
+        return(as.matrix(x))
+    if (!is.null(batch)) {
+        batch <- as.factor(batch)
+        contrasts(batch) <- contr.sum(levels(batch))
+        batch <- model.matrix(~batch)[, -1, drop = FALSE]
+    }
+    if (!is.null(batch2)) {
+        batch2 <- as.factor(batch2)
+        contrasts(batch2) <- contr.sum(levels(batch2))
+        batch2 <- model.matrix(~batch2)[, -1, drop = FALSE]
+    }
+    if (!is.null(covariates)) 
+        covariates <- as.matrix(covariates)
+    X.batch <- cbind(batch, batch2, covariates)
+    if (!is.null(group)) {
+        group <- as.factor(group)
+        design <- model.matrix(~group)
+    }
+    x <- as.matrix(x)
+    fit <- lmFit(x, cbind(design, X.batch), ...)
+    beta <- fit$coefficients[, -(1:ncol(design)), drop = FALSE]
+    beta[is.na(beta)] <- 0
+    return(list("Y_corrected" = x - beta %*% t(X.batch), "differences" = beta %*% t(X.batch)))
+}
+```
+
+
+# Original data
+
+```{r}
+sce <- readRDS(file = here("Data","leduc2022_pSCoPE_data","leduc_sce.RDS"))
+
+design <- model.matrix(~1+Channel+Set, data = colData(sce))
+fmX <- make_full_rank_matrix(design)
+X <- fmX$matrix
+
+```
+
+
+
+```{r}
+set.seed(100)
+
+Y <- assays(sce)$logintensities
+annot <- colData(sce)
+Ybi <- removeBatchEffect(Y, batch = annot$Set, batch2 = annot$Channel)
+
+saveRDS(object = Ybi$Y_corrected, 
+        file = here("Analyses","Leduc","Output_batch_effect_removal","logintensities_batch_removed.RDS"))
+write.csv(x = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal","logintensities_batch_removed.csv"))
+
+saveRDS(object = Ybi$differences, 
+        file = here("Analyses","Leduc","Output_batch_effect_removal","logintensities_batch_removed_differences.RDS"))
+```
+
+```{r}
+for(i in c(1:10)){
+
+  
+  MISTOT10_MNAR25 <- readRDS(paste0(here("Data","leduc2022_pSCoPE_data"),"/leduc_MISTOT10_MNAR25_", i, ".RDS"))
+  
+  Ybi <- removeBatchEffect(MISTOT10_MNAR25$data, batch = annot$Set, batch2 = annot$Channel)
+  
+  saveRDS(object = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR25_", i, ".RDS")))
+  write.csv(x = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR25_", i, ".csv")))
+  
+  saveRDS(object = Ybi$differences, 
+        file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR25_", i, "_differences.csv")))
+
+
+  MISTOT10_MNAR50 <- readRDS(paste0(here("Data","leduc2022_pSCoPE_data"),"/leduc_MISTOT10_MNAR50_", i, ".RDS"))
+  
+  Ybi <- removeBatchEffect(MISTOT10_MNAR50$data, batch = annot$Set, batch2 = annot$Channel)
+  
+  saveRDS(object = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR50_", i, ".RDS")))
+  write.csv(x = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR50_", i, ".csv")))
+  
+    saveRDS(object = Ybi$differences, 
+        file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR50_", i, "_differences.csv")))
+  
+  
+  MISTOT10_MNAR75 <- readRDS(paste0(here("Data","leduc2022_pSCoPE_data"),"/leduc_MISTOT10_MNAR75_", i, ".RDS"))
+  
+  Ybi <- removeBatchEffect(MISTOT10_MNAR75$data, batch = annot$Set, batch2 = annot$Channel)
+  
+  saveRDS(object = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR75_", i, ".RDS")))
+  write.csv(x = Ybi$Y_corrected, file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR75_", i, ".csv")))
+  
+  saveRDS(object = Ybi$differences, 
+        file = here("Analyses","Leduc","Output_batch_effect_removal",
+                                    paste0("logintensities_batch_removed_MISTOT10_MNAR75_", i, "_differences.csv")))
+  
+}
+```

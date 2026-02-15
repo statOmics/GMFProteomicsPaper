@@ -18,11 +18,14 @@ library(SingleCellExperiment)
 
 ```{r}
 set.seed(100)
+# Read the original data that is already filtered, median normalized and preprocessed in /Data/CPTAC_data.Rmd.
+
 sce <- readRDS(file = here("Data/CPTAC_data/CPTAC_sce.RDS"))
 data <- t(assay(sce, "logintensities"))
 
 begin_time <- Sys.time()
   
+# run NIPALS pca
 df <- nipals(data, center = TRUE, scale = F, ncomp = 6, 
              fitted = TRUE, verbose = TRUE)
   
@@ -39,6 +42,10 @@ saveRDS(object = time_difference,
 
 ```{r}
 set.seed(100)
+
+# Run NIPALS pca for the different simulations in which
+# 25% of the simulated missing values are missing due to low abundance.
+
 for(i in c(1:10)){
 
   sce <- readRDS(paste0(here("Data","CPTAC_data"),"/CPTAC_MISTOT10_MNAR25_", i, ".RDS"))
@@ -56,6 +63,9 @@ for(i in c(1:10)){
 
 ```{r}
 set.seed(100)
+
+# Run NIPALS pca for the different simulations in which
+# 50% of the simulated missing values are missing due to low abundance.
 
 for(i in c(1:10)){
 
@@ -75,6 +85,9 @@ for(i in c(1:10)){
 
 ```{r}
 set.seed(100)
+
+# Run NIPALS pca for the different simulations in which
+# 75% of the simulated missing values are missing due to low abundance.
 
 for(i in c(1:10)){
 

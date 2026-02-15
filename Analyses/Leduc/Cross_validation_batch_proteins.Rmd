@@ -1,0 +1,64 @@
+---
+title: "CV Leduc"
+output: html_document
+date: '2024-07-18'
+---
+# SGD GMF
+
+```{r}
+library(here)
+library(sgdGMF)
+library(dplyr)
+library(RSpectra)
+library(scater)
+library(BiocParallel)
+library(BiocSingular)
+library(DelayedArray)
+library(fullRankMatrix)
+
+devtools::load_all(here("omicsGMF"))
+
+```
+
+# Load data
+```{r}
+sce <- readRDS(file = here("Data","leduc2022_pSCoPE_data","leduc_sce.RDS"))
+
+```
+
+
+## Cross validation
+
+```{r}
+set.seed(100)
+
+
+
+design <- model.matrix(~1+Channel+Set, data = colData(sce))
+fmX <- make_full_rank_matrix(design)
+X <- fmX$matrix
+
+design_feature <- model.matrix(~1+Leading.razor.protein.id, data = rowData(sce))
+Z <- design_feature
+
+
+dim(sce)
+family <- gaussian()
+cv <- calculateCVGMF(sce, family = family, X = X, Z = Z, 
+                      exprs_values = "logintensities", ncomponents = seq(1,20,2), 
+                      control.alg = list(tol = 0.001, maxiter = 10000), 
+                      control.cv = list(nfolds = 3),
+                      ntop = nrow(sce))
+saveRDS(object = cv, file = here("Analyses","Leduc","Output","crossval_batch_proteins.RDS"))
+
+```
+```{r}
+print(cv)
+print(cv %>% group_by(ncomp) %>% summarise(mean_dev = mean(dev)))
+
+```
+
+
+
+
+
